@@ -9,52 +9,36 @@ The checklist below is written for someone who does **not** write code. Follow e
 1. **Confirm the file exists in the repository**
    1. Open your repository on GitHub (or the git provider you use).
    2. Look at the root folder — you should see an `api` folder next to `README.md`.
-   3. Click `api`, then click `availability.js`. If the file is missing, create it and paste the following temporary handler:
-      ```js
-      export default function handler(req, res) {
-        res.status(200).json({ ok: true, path: "/api/availability" });
-      }
-      ```
+3. Click `api`, then click `availability.js`. If the file is missing, create it and paste the following temporary handler:
+     ```js
+     // /api/availability.js
+     module.exports = (req, res) => {
+       res.status(200).json({ ok: true, path: "/api/availability" });
+     };
+     ```
    4. Commit the change so Vercel can pick it up on the next deploy.
 
-2. **(Optional but recommended) Ensure `vercel.json` exists**
-   1. In the repository root, make sure there is a file called `vercel.json` with the following contents:
-      ```json
-      {
-        "version": 2,
-        "routes": [
-          { "src": "/api/availability", "dest": "/api/availability.js" }
-        ],
-        "functions": {
-          "api/*.js": {
-            "runtime": "nodejs20.x"
-          }
-        }
-      }
-      ```
-   2. This file tells Vercel exactly which handler to run when someone visits `/api/availability`.
-
-3. **Set the project root in Vercel**
+2. **Set the project root in Vercel**
    1. Log into Vercel and open the `dvds-availability` project.
    2. In the left sidebar choose **Settings**.
    3. Under **Project Settings → General → Build & Development Settings**, click **Edit** on the **Root Directory** row.
    4. Type `/` (a single forward slash), then click **Save**. This guarantees that the root of the repo — including the `api` folder — is deployed.
    5. In the same section, set **Framework Preset** to **Other** and leave **Output Directory** empty, then click **Save** again.
 
-4. **Deploy and promote to production**
+3. **Deploy and promote to production**
    1. Click **Deployments** in the left sidebar.
    2. Press **Deploy to Production** if the button is available. If the newest build is listed as *Preview*, click that deployment, then click **Promote to Production** in the top-right corner.
    3. Wait for the deployment status to change to **Ready**.
 
-5. **Check that Vercel detected the function**
+4. **Check that Vercel detected the function**
    1. Inside the project, open the **Functions** tab.
    2. You should see an entry named `api/availability` with the runtime `Node.js 20.x`. If it is missing, go back to Step 1 to verify the file path and commit.
 
-6. **Test the live endpoint**
+5. **Test the live endpoint**
    1. Visit <https://dvds-availability.vercel.app/api/availability> in a browser.
    2. You should see JSON. If you kept the temporary handler, it will show `{ "ok": true, "path": "/api/availability" }`.
 
-7. **Restore the full Acuity integration**
+6. **Restore the full Acuity integration**
    1. Once the test JSON loads correctly, edit `api/availability.js` and replace the temporary handler with the full Acuity code already in this repository (the file currently contains the production handler).
    2. Commit the change and push.
    3. Back in Vercel, trigger another production deployment (repeat Step 4) so the live endpoint serves real availability data.
