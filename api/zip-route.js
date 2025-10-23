@@ -1,9 +1,34 @@
-const {
-  ZIP_TO_CITY,
-  CITY_TO_CALENDAR,
-  getCityForZip,
-  getCalendarForCity,
-} = require("./_locations");
+const ZIP_TO_CITY = {
+  "85254": "scottsdale",
+  "85016": "phoenix",
+  "85018": "arcadia",
+  "85251": "old-town",
+  "85260": "scottsdale-north",
+};
+
+const CITY_TO_CALENDAR = {
+  scottsdale: 4018261,
+  phoenix: 4018262,
+  arcadia: 4018263,
+  "old-town": 4018264,
+  "scottsdale-north": 4018265,
+};
+
+function getCityForZip(zip) {
+  if (!zip) {
+    return null;
+  }
+
+  return ZIP_TO_CITY[String(zip).trim()];
+}
+
+function getCalendarForCity(city) {
+  if (!city) {
+    return null;
+  }
+
+  return CITY_TO_CALENDAR[String(city).toLowerCase()];
+}
 
 function sendCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -11,7 +36,7 @@ function sendCors(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-module.exports = function handler(req, res) {
+function handler(req, res) {
   sendCors(res);
 
   if (req.method === "OPTIONS") {
@@ -69,4 +94,11 @@ module.exports = function handler(req, res) {
     zipToCity: ZIP_TO_CITY,
     cityToCalendar: CITY_TO_CALENDAR,
   });
-};
+}
+
+module.exports = handler;
+module.exports.ZIP_TO_CITY = ZIP_TO_CITY;
+module.exports.CITY_TO_CALENDAR = CITY_TO_CALENDAR;
+module.exports.getCityForZip = getCityForZip;
+module.exports.getCalendarForCity = getCalendarForCity;
+module.exports.config = { runtime: "nodejs20.x" };

@@ -1,7 +1,7 @@
 const {
   getCityForZip,
   getCalendarForCity,
-} = require("./_locations");
+} = require("./zip-route");
 
 function applyCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -53,7 +53,7 @@ async function fetchAvailability({ calendarId, appointmentTypeId, startDate }) {
   return response.json();
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   applyCors(res);
 
   if (req.method === "OPTIONS") {
@@ -114,4 +114,7 @@ module.exports = async function handler(req, res) {
       details: error.body || undefined,
     });
   }
-};
+}
+
+module.exports = handler;
+module.exports.config = { runtime: "nodejs20.x" };
