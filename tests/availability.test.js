@@ -53,16 +53,16 @@ test('availability endpoint returns data when fetch succeeds', async () => {
   const res = createResponse();
 
   const previousFetch = global.fetch;
+  const previousEnv = process.env;
 
   global.fetch = async () => ({
     ok: true,
     json: async () => sample
   });
 
-  try {
-    const env = process.env;
-    process.env = { ...process.env, ACUITY_USER_ID: 'user', ACUITY_API_KEY: 'key' };
+  process.env = { ...previousEnv, ACUITY_USER_ID: 'user', ACUITY_API_KEY: 'key' };
 
+  try {
     await availability(
       {
         method: 'GET',
@@ -78,9 +78,8 @@ test('availability endpoint returns data when fetch succeeds', async () => {
       appointmentTypeId: '123',
       times: sample
     });
-
-    process.env = env;
   } finally {
     global.fetch = previousFetch;
+    process.env = previousEnv;
   }
 });
