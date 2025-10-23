@@ -1,5 +1,4 @@
 {
   "name": "dvds-availability",
-  "private": true,
-  "type": "module"
+  "private": true
 }
