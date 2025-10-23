@@ -119,7 +119,7 @@ function groupAvailability(slots, timeZone) {
     }));
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const rawLocation = getQueryParam(req, 'location', DEFAULT_LOCATION);
   const normalizedLocation = typeof rawLocation === 'string'
     ? rawLocation.toLowerCase()
@@ -180,3 +180,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Failed to fetch availability data', details: error.message });
   }
 }
+
+module.exports = handler;
