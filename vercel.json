@@ -1,7 +1,7 @@
 {
   "version": 2,
   "routes": [
-    { "src": "^/api/availability$", "dest": "api/availability.js" },
-    { "src": "^/api/ping$", "dest": "api/ping.js" }
+    { "src": "^/api/availability$", "dest": "/api/availability.js" },
+    { "src": "^/api/ping$", "dest": "/api/ping.js" }
   ]
 }

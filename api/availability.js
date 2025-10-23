@@ -1,15 +1,16 @@
-const allowedOrigin = "https://www.deervalleydrivingschool.com";
+const allowedOrigins = [
+  "https://www.deervalleydrivingschool.com",
+  "https://dvds-availability.vercel.app"
+];
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  applyCors(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  const { location, appointmentTypeId } = req.query;
+  const { location, appointmentTypeId } = req.query || {};
   if (!location || !appointmentTypeId) {
     return res
       .status(400)
@@ -43,12 +44,21 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    return res
-      .status(200)
-      .json({ ok: true, location, appointmentTypeId, times: data });
+    return res.status(200).json({ ok: true, location, appointmentTypeId, times: data });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
+}
+
+function applyCors(req, res) {
+  const requestOrigin = req.headers?.origin;
+  const originToUse = allowedOrigins.includes(requestOrigin)
+    ? requestOrigin
+    : allowedOrigins[0];
+
+  res.setHeader("Access-Control-Allow-Origin", originToUse);
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
 async function safeJson(response) {
