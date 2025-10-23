@@ -1,4 +1,7 @@
 {
   "name": "dvds-availability",
-  "private": true
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serverless test handler for Deer Valley Driving School availability API",
+  "license": "MIT"
 }
