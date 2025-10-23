@@ -1,4 +1,12 @@
 {
   "version": 2,
-  "functions": { "api/**/*.js": { "runtime": "nodejs20.x" } }
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "routes": [
+    { "src": "^/api/availability$", "dest": "api/availability.js" },
+    { "src": "^/api/ping$", "dest": "api/ping.js" }
+  ]
 }
