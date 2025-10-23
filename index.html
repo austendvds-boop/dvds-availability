@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DVDs Availability API</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0f172a;
+        color: #f8fafc;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+      }
+      main {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 16px;
+        padding: 32px;
+        max-width: 640px;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.6);
+      }
+      h1 {
+        font-size: 1.75rem;
+        margin-top: 0;
+      }
+      p {
+        line-height: 1.6;
+      }
+      code {
+        background: rgba(15, 23, 42, 0.5);
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      a {
+        color: #38bdf8;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>DVDs Availability API</h1>
+      <p>
+        This deployment exposes three zero-config API endpoints. Use the links
+        below to verify they respond in production.
+      </p>
+      <ul>
+        <li>
+          <a href="/api/ping">GET /api/ping</a> – Health check returning
+          <code>{"ok": true}</code>
+        </li>
+        <li>
+          <a href="/api/zip-route?zip=85254">GET /api/zip-route</a> – ZIP and
+          city routing helper
+        </li>
+        <li>
+          <a
+            href="/api/availability?location=scottsdale&amp;appointmentTypeId=50529778"
+            >GET /api/availability</a
+          >
+          – Proxies Acuity availability (requires credentials)
+        </li>
+      </ul>
+      <p>
+        Refer to the <a href="https://github.com/austendvds-boop/dvds-availability/blob/main/README.md">README</a>
+        for more details.
+      </p>
+    </main>
+  </body>
+</html>
