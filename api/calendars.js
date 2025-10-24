@@ -1,11 +1,11 @@
-const { DEFAULT_TZ, getCalendars, credentialForAccount } = require("../lib/acuity");
+const { DEFAULT_TZ, getCredentials, getCalendars } = require("../lib/acuity-client");
 
 const ALLOWED_ORIGINS = new Set([
   "https://www.deervalleydrivingschool.com",
   "https://dvds-availability.vercel.app"
 ]);
 
-module.exports = async (req, res) => {
+const respondCors = (req, res) => {
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
@@ -13,26 +13,32 @@ module.exports = async (req, res) => {
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+};
+
+module.exports = async (req, res) => {
+  respondCors(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET, OPTIONS");
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
 
   const accountParam = String(req.query?.account || "");
   const account = /parents/i.test(accountParam) ? "parents" : "main";
 
+  const credentials = getCredentials(account);
+  if (!credentials.user || !credentials.key) {
+    return res.status(500).json({ ok: false, error: "Missing Acuity credentials" });
+  }
+
+  res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+
   try {
-    const { user, key } = credentialForAccount(account);
-    if (!user || !key) {
-      return res
-        .status(500)
-        .json({ ok: false, error: "Missing Acuity credentials" });
-    }
-
-    const { calendars } = await getCalendars(account);
-
+    const calendars = await getCalendars(account);
     return res.status(200).json({
       ok: true,
       account,
@@ -42,11 +48,9 @@ module.exports = async (req, res) => {
     });
   } catch (error) {
     return res
-      .status(500)
-      .json({ ok: false, error: error?.message || "Internal error" });
+      .status(502)
+      .json({ ok: false, error: error?.message || "Failed to load calendars" });
   }
 };
 
-module.exports.config = {
-  runtime: "nodejs20.x"
-};
+module.exports.config = { runtime: "nodejs20.x" };

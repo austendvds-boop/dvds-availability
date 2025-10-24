@@ -21,7 +21,7 @@
         border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 16px;
         padding: 32px;
-        max-width: 680px;
+        max-width: 720px;
         box-shadow: 0 20px 50px rgba(15, 23, 42, 0.6);
       }
       h1 {
@@ -51,8 +51,8 @@
     <main>
       <h1>DVDs Availability API</h1>
       <p>
-        This deployment exposes zero-config API endpoints for Deer Valley Driving School.
-        Use the links below to verify they respond in production.
+        Zero-config serverless handlers serving Deer Valley Driving School. Use
+        the links below to verify production responses.
       </p>
       <ul>
         <li>
@@ -61,23 +61,33 @@
         </li>
         <li>
           <a href="/api/zip-route?zip=85254">GET /api/zip-route</a> – ZIP
-          router returning city calendar data and the resolved calendar ID
+          router returning the target city, appointment type, and cached
+          calendar ID
         </li>
         <li>
-          <a href="/api/calendars">GET /api/calendars</a> – Live calendars API (`?account=parents` for the alternate account)
+          <a href="/api/calendars">GET /api/calendars</a> – Live calendars API
+          (`?account=parents` for the alternate credentials)
         </li>
         <li>
           <a
             href="/api/availability?location=scottsdale&amp;appointmentTypeId=50529778&amp;date=2025-10-23"
             >GET /api/availability</a
           >
-          – Dual-account Acuity availability proxy (defaults `date` to today in America/Phoenix)
+          – Dual-account Acuity availability proxy (defaults `date` to today in
+          America/Phoenix)
         </li>
       </ul>
       <p>
-        Refer to the
-        <a href="https://github.com/austendvds-boop/dvds-availability/blob/main/README.md">README</a>
-        for more details.
+        Calendar IDs are stored in <code>api/availability.js</code>; update them
+        after calling <code>/api/calendars</code> for each account so responses
+        stay in sync with Acuity.
+      </p>
+      <p>
+        See the
+        <a href="https://github.com/austendvds-boop/dvds-availability/blob/main/README.md"
+          >README</a
+        >
+        for notes and example calls.
       </p>
     </main>
   </body>
