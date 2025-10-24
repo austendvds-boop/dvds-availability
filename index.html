@@ -61,17 +61,17 @@
         </li>
         <li>
           <a href="/api/zip-route?zip=85254">GET /api/zip-route</a> – ZIP
-          router returning city calendar data
+          router returning city calendar data and the resolved calendar ID
         </li>
         <li>
-          <a href="/api/calendars">GET /api/calendars</a> – Calendar catalog with appointment types
+          <a href="/api/calendars">GET /api/calendars</a> – Live calendars API (`?account=parents` for the alternate account)
         </li>
         <li>
           <a
-            href="/api/availability?location=scottsdale&amp;appointmentTypeId=50529778"
+            href="/api/availability?location=scottsdale&amp;appointmentTypeId=50529778&amp;date=2025-10-23"
             >GET /api/availability</a
           >
-          – Dual-account Acuity availability proxy
+          – Dual-account Acuity availability proxy (defaults `date` to today in America/Phoenix)
         </li>
       </ul>
       <p>
