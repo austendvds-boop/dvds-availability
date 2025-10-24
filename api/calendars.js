@@ -1,24 +1,9 @@
-const { URL } = require("url");
+const { DEFAULT_TZ, getCalendars, credentialForAccount } = require("../lib/acuity");
 
 const ALLOWED_ORIGINS = new Set([
   "https://www.deervalleydrivingschool.com",
   "https://dvds-availability.vercel.app"
 ]);
-
-const DEFAULT_TZ = process.env.TZ_DEFAULT || "America/Phoenix";
-
-const credentialForAccount = (account) => {
-  if (account === "parents") {
-    return {
-      user: process.env.ACUITY_PARENTS_USER_ID,
-      key: process.env.ACUITY_PARENTS_API_KEY
-    };
-  }
-  return {
-    user: process.env.ACUITY_MAIN_USER_ID || process.env.ACUITY_USER_ID,
-    key: process.env.ACUITY_MAIN_API_KEY || process.env.ACUITY_API_KEY
-  };
-};
 
 module.exports = async (req, res) => {
   const origin = req.headers.origin;
@@ -37,37 +22,21 @@ module.exports = async (req, res) => {
 
   const accountParam = String(req.query?.account || "");
   const account = /parents/i.test(accountParam) ? "parents" : "main";
-  const { user, key } = credentialForAccount(account);
-
-  if (!user || !key) {
-    return res.status(500).json({ ok: false, error: "Missing Acuity credentials" });
-  }
-
-  const url = new URL("https://acuityscheduling.com/api/v1/calendars");
-  url.searchParams.set("timezone", DEFAULT_TZ);
-
-  const auth =
-    "Basic " + Buffer.from(`${user}:${key}`, "utf8").toString("base64");
 
   try {
-    const response = await fetch(url, { headers: { Authorization: auth } });
-    const text = await response.text();
-    if (!response.ok) {
+    const { user, key } = credentialForAccount(account);
+    if (!user || !key) {
       return res
-        .status(response.status)
-        .json({ ok: false, error: text || `Acuity ${response.status}` });
+        .status(500)
+        .json({ ok: false, error: "Missing Acuity credentials" });
     }
 
-    let calendars;
-    try {
-      calendars = JSON.parse(text);
-    } catch (error) {
-      calendars = text;
-    }
+    const { calendars } = await getCalendars(account);
 
     return res.status(200).json({
       ok: true,
       account,
+      timezone: DEFAULT_TZ,
       count: Array.isArray(calendars) ? calendars.length : undefined,
       calendars
     });

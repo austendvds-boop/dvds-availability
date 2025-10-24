@@ -1,30 +1,15 @@
-const { URL } = require("url");
+const {
+  DEFAULT_TZ,
+  credentialForAccount,
+  getCalendarIdForLabel,
+  resolveCalendarById
+} = require("../lib/acuity");
+const { getLocationConfig, normalizeLocation } = require("../lib/locations");
 
 const ALLOWED_ORIGINS = new Set([
   "https://www.deervalleydrivingschool.com",
   "https://dvds-availability.vercel.app"
 ]);
-
-const DEFAULT_TZ = process.env.TZ_DEFAULT || "America/Phoenix";
-
-// TODO: replace placeholder calendar IDs with the numeric values returned by /api/calendars
-const CALENDAR_IDS = {
-  main: {
-    anthem: null,
-    ahwatukee: null,
-    apachejunction: null,
-    chandler: null,
-    gilbert: null,
-    mesa: null,
-    scottsdale: null,
-    tempe: null
-  },
-  parents: {
-    parents: null
-  }
-};
-
-const normalizeLocation = (value = "") => value.trim().toLowerCase();
 
 const isoDateInTz = (tz) => {
   return new Intl.DateTimeFormat("en-CA", {
@@ -35,46 +20,10 @@ const isoDateInTz = (tz) => {
   }).format(new Date());
 };
 
-const resolveCalendarId = (location, explicitCalendarId) => {
-  if (explicitCalendarId) {
-    const id = Number(explicitCalendarId);
-    return Number.isFinite(id) ? id : null;
-  }
-
-  const key = normalizeLocation(location);
-  if (!key) return null;
-
-  if (CALENDAR_IDS.parents[key] != null) {
-    return CALENDAR_IDS.parents[key];
-  }
-  return CALENDAR_IDS.main[key] ?? null;
-};
-
-const resolveAccount = (location, calendarId) => {
-  const key = normalizeLocation(location);
-  if (CALENDAR_IDS.parents[key] != null) return "parents";
-  if (typeof calendarId === "number") {
-    for (const [account, mapping] of Object.entries(CALENDAR_IDS)) {
-      for (const val of Object.values(mapping)) {
-        if (val === calendarId && val != null) return account;
-      }
-    }
-  }
-  if (/parents/i.test(location || "")) return "parents";
-  return "main";
-};
-
-const credentialForAccount = (account) => {
-  if (account === "parents") {
-    return {
-      user: process.env.ACUITY_PARENTS_USER_ID,
-      key: process.env.ACUITY_PARENTS_API_KEY
-    };
-  }
-  return {
-    user: process.env.ACUITY_MAIN_USER_ID || process.env.ACUITY_USER_ID,
-    key: process.env.ACUITY_MAIN_API_KEY || process.env.ACUITY_API_KEY
-  };
+const parseCalendarId = (value) => {
+  if (value == null) return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
 };
 
 module.exports = async (req, res) => {
@@ -100,14 +49,56 @@ module.exports = async (req, res) => {
       .json({ ok: false, error: "Missing appointmentTypeId" });
   }
 
-  const resolvedCalendarId = resolveCalendarId(location, calendarId);
+  const locationConfig = location ? getLocationConfig(location) : null;
+  const normalizedLocation = normalizeLocation(location);
+  const explicitCalendarId = parseCalendarId(calendarId);
+
+  if (!locationConfig && explicitCalendarId == null) {
+    return res
+      .status(400)
+      .json({ ok: false, error: "Missing location or calendarId" });
+  }
+
+  let account = locationConfig?.account || null;
+  let resolvedCalendarId = explicitCalendarId;
+
+  try {
+    if (resolvedCalendarId == null && locationConfig) {
+      resolvedCalendarId = await getCalendarIdForLabel(
+        locationConfig.account,
+        locationConfig.label
+      );
+      if (resolvedCalendarId == null) {
+        return res.status(502).json({
+          ok: false,
+          error: `Unable to resolve calendar ID for ${locationConfig.label}`
+        });
+      }
+      account = locationConfig.account;
+    }
+
+    if (resolvedCalendarId != null && !account) {
+      const match = await resolveCalendarById(resolvedCalendarId);
+      if (match) {
+        account = match.account;
+      }
+    }
+  } catch (error) {
+    return res
+      .status(502)
+      .json({ ok: false, error: error?.message || "Calendar lookup failed" });
+  }
+
   if (resolvedCalendarId == null) {
     return res
       .status(400)
       .json({ ok: false, error: "Missing or unknown calendarId" });
   }
 
-  const account = resolveAccount(location, resolvedCalendarId);
+  if (!account) {
+    account = /parents/i.test(location || "") ? "parents" : "main";
+  }
+
   const { user, key } = credentialForAccount(account);
   if (!user || !key) {
     return res.status(500).json({ ok: false, error: "Missing Acuity credentials" });
@@ -150,7 +141,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({
       ok: true,
       account,
-      location: normalizeLocation(location),
+      location: normalizedLocation || undefined,
       appointmentTypeId,
       calendarId: resolvedCalendarId,
       date: targetDate,
