@@ -21,7 +21,7 @@
         border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 16px;
         padding: 32px;
-        max-width: 640px;
+        max-width: 680px;
         box-shadow: 0 20px 50px rgba(15, 23, 42, 0.6);
       }
       h1 {
@@ -42,14 +42,17 @@
       a {
         color: #38bdf8;
       }
+      li + li {
+        margin-top: 8px;
+      }
     </style>
   </head>
   <body>
     <main>
       <h1>DVDs Availability API</h1>
       <p>
-        This deployment exposes three zero-config API endpoints. Use the links
-        below to verify they respond in production.
+        This deployment exposes zero-config API endpoints for Deer Valley Driving School.
+        Use the links below to verify they respond in production.
       </p>
       <ul>
         <li>
@@ -57,19 +60,23 @@
           <code>{"ok": true}</code>
         </li>
         <li>
-          <a href="/api/zip-route?zip=85254">GET /api/zip-route</a> – ZIP and
-          city routing helper
+          <a href="/api/zip-route?zip=85254">GET /api/zip-route</a> – ZIP
+          router returning city calendar data
+        </li>
+        <li>
+          <a href="/api/calendars">GET /api/calendars</a> – Calendar catalog with appointment types
         </li>
         <li>
           <a
             href="/api/availability?location=scottsdale&amp;appointmentTypeId=50529778"
             >GET /api/availability</a
           >
-          – Proxies Acuity availability (requires credentials)
+          – Dual-account Acuity availability proxy
         </li>
       </ul>
       <p>
-        Refer to the <a href="https://github.com/austendvds-boop/dvds-availability/blob/main/README.md">README</a>
+        Refer to the
+        <a href="https://github.com/austendvds-boop/dvds-availability/blob/main/README.md">README</a>
         for more details.
       </p>
     </main>

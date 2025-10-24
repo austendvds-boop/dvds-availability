@@ -1,120 +1,36 @@
-const {
-  getCityForZip,
-  getCalendarForCity,
-} = require("./zip-route");
-
-function applyCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+module.exports = async (req, res) => {
+  const ALLOWED = new Set([
+    "https://www.deervalleydrivingschool.com",
+    "https://dvds-availability.vercel.app"
+  ]);
+  const origin = req.headers.origin;
+  if (origin && ALLOWED.has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-}
+  if (req.method === "OPTIONS") return res.status(200).end();
+  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
 
-function ensureEnv() {
-  const userId = process.env.ACUITY_USER_ID;
-  const apiKey = process.env.ACUITY_API_KEY;
+  const { location, appointmentTypeId } = req.query || {};
+  if (!location || !appointmentTypeId)
+    return res.status(400).json({ ok:false, error:"Missing location or appointmentTypeId" });
 
-  if (!userId || !apiKey) {
-    throw new Error("Missing ACUITY credentials");
-  }
+  const isParents = /parents/i.test(location);
+  const user = process.env[isParents ? "ACUITY_PARENTS_USER_ID" : "ACUITY_MAIN_USER_ID"];
+  const key  = process.env[isParents ? "ACUITY_PARENTS_API_KEY" : "ACUITY_MAIN_API_KEY"];
+  if (!user || !key) return res.status(500).json({ ok:false, error:"Missing Acuity credentials" });
 
-  return { userId, apiKey };
-}
-
-async function fetchAvailability({ calendarId, appointmentTypeId, startDate }) {
-  const { userId, apiKey } = ensureEnv();
-  const searchParams = new URLSearchParams({
-    appointmentTypeID: String(appointmentTypeId),
-    calendarID: String(calendarId),
-  });
-
-  if (startDate) {
-    searchParams.set("startDate", startDate);
-  }
-
-  const response = await fetch(
-    `https://acuityscheduling.com/api/v1/availability/times?${searchParams.toString()}`,
-    {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${userId}:${apiKey}`).toString("base64")}`,
-        "User-Agent": "dvd-availability-api",
-        Accept: "application/json",
-      },
-    }
-  );
-
-  if (!response.ok) {
-    const text = await response.text();
-    const error = new Error("Acuity request failed");
-    error.status = response.status;
-    error.body = text;
-    throw error;
-  }
-
-  return response.json();
-}
-
-async function handler(req, res) {
-  applyCors(res);
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  }
-
-  const { location, zip, appointmentTypeId, startDate } = req.query;
-  const normalizedLocation = Array.isArray(location) ? location[0] : location;
-  const normalizedZip = Array.isArray(zip) ? zip[0] : zip;
-  const normalizedAppointment = Array.isArray(appointmentTypeId)
-    ? appointmentTypeId[0]
-    : appointmentTypeId;
-  const normalizedStartDate = Array.isArray(startDate) ? startDate[0] : startDate;
-
-  const calendarCity =
-    normalizedLocation || getCityForZip(normalizedZip ?? "");
-  const calendarId = getCalendarForCity(calendarCity);
-
-  if (!calendarId) {
-    return res.status(400).json({
-      ok: false,
-      error: "Unknown location. Provide a valid location or zip parameter.",
-    });
-  }
-
-  if (!normalizedAppointment) {
-    return res.status(400).json({
-      ok: false,
-      error: "Missing required appointmentTypeId parameter.",
-    });
-  }
+  const baseUrl = "https://acuityscheduling.com/api/v1/availability/times";
+  const auth = "Basic " + Buffer.from(`${user}:${key}`).toString("base64");
+  const url = `${baseUrl}?appointmentTypeID=${encodeURIComponent(appointmentTypeId)}&calendar=${encodeURIComponent(location)}`;
 
   try {
-    const data = await fetchAvailability({
-      calendarId,
-      appointmentTypeId: normalizedAppointment,
-      startDate: normalizedStartDate,
-    });
-
-    res.setHeader("Cache-Control", "s-maxage=30, stale-while-revalidate=300");
-    return res.status(200).json({
-      ok: true,
-      location: calendarCity,
-      calendarId,
-      appointmentTypeId: normalizedAppointment,
-      data,
-    });
-  } catch (error) {
-    const status = error.status || 502;
-    return res.status(status).json({
-      ok: false,
-      error: error.message,
-      details: error.body || undefined,
-    });
+    const r = await fetch(url, { headers: { Authorization: auth } });
+    const text = await r.text();
+    if (!r.ok) return res.status(r.status).json({ ok:false, error:text || `Acuity ${r.status}` });
+    let data; try { data = JSON.parse(text); } catch { data = text; }
+    return res.status(200).json({ ok:true, source:isParents?"parents":"main", location, appointmentTypeId, count:Array.isArray(data)?data.length:undefined, times:data });
+  } catch (e) {
+    return res.status(500).json({ ok:false, error:e?.message || "Internal error" });
   }
-}
-
-module.exports = handler;
-module.exports.config = { runtime: "nodejs20.x" };
+};
