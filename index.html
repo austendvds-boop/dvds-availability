@@ -83,6 +83,11 @@
         stay in sync with Acuity.
       </p>
       <p>
+        Every response includes an <code>X-Request-Id</code> header and embeds
+        the same <code>requestId</code> in the JSON body—grab that value when
+        checking Vercel logs for Acuity errors.
+      </p>
+      <p>
         See the
         <a href="https://github.com/austendvds-boop/dvds-availability/blob/main/README.md"
           >README</a

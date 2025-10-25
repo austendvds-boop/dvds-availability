@@ -1,4 +1,7 @@
+const { randomUUID } = require("crypto");
+
 const availability = require("./availability");
+const { CALENDAR_IDS, ensureCalendarId } = availability;
 
 const ALLOWED_ORIGINS = new Set([
   "https://www.deervalleydrivingschool.com",
@@ -39,8 +42,16 @@ const respondCors = (req, res) => {
 
 const normalizeZip = (value = "") => value.toString().trim();
 
-const handler = (req, res) => {
+const handler = async (req, res) => {
   respondCors(req, res);
+
+  const requestId = String(req.headers["x-request-id"] || randomUUID());
+  res.setHeader("X-Request-Id", requestId);
+
+  const send = (status, payload) => res.status(status).json({ requestId, ...payload });
+  const logError = (message, meta = {}) => {
+    console.error(`[zip-route] ${message}`, { requestId, ...meta });
+  };
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -48,32 +59,44 @@ const handler = (req, res) => {
 
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET, OPTIONS");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return send(405, { ok: false, error: "Method not allowed" });
   }
 
   const zip = normalizeZip(req.query?.zip || "");
   if (!zip) {
-    return res.status(400).json({ ok: false, error: "Missing zip" });
+    return send(400, { ok: false, error: "Missing zip" });
   }
 
   const cityKey = ZIP_TO_CITY[zip] || FALLBACK_CITY;
   const config = LOCATION_CONFIG[cityKey];
   if (!config) {
-    return res.status(404).json({ ok: false, error: `No calendar for ${cityKey}` });
+    return send(404, { ok: false, error: `No calendar for ${cityKey}` });
   }
 
-  const calendarsForAccount = availability.CALENDAR_IDS[config.account] || {};
+  const calendarsForAccount = CALENDAR_IDS[config.account] || {};
   const calendarEntry = calendarsForAccount[cityKey] || null;
-  const calendarId = calendarEntry?.calendarId ?? null;
+
+  let calendarId = calendarEntry?.calendarId ?? null;
+  if (calendarId == null && typeof ensureCalendarId === "function") {
+    try {
+      calendarId = await ensureCalendarId(config.account, cityKey);
+    } catch (error) {
+      logError("calendar lookup failed", {
+        cityKey,
+        account: config.account,
+        error: error?.message
+      });
+    }
+  }
 
   res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
-  return res.status(200).json({
+  return send(200, {
     ok: true,
     zip,
     cityKey,
     calendar: config.label,
-    calendarId,
+    calendarId: calendarId ?? null,
     appointmentTypeId: config.appointmentTypeId,
     account: config.account
   });

@@ -1,3 +1,5 @@
+const { randomUUID } = require("crypto");
+
 const { DEFAULT_TZ, getCredentials, getCalendars, buildAuthHeader } = require("../lib/acuity-client");
 
 const ALLOWED_ORIGINS = new Set([
@@ -94,18 +96,26 @@ const respondCors = (req, res) => {
 const handler = async (req, res) => {
   respondCors(req, res);
 
+  const requestId = String(req.headers["x-request-id"] || randomUUID());
+  res.setHeader("X-Request-Id", requestId);
+
+  const send = (status, payload) => res.status(status).json({ requestId, ...payload });
+  const logError = (message, meta = {}) => {
+    console.error(`[availability] ${message}`, { requestId, ...meta });
+  };
+
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET, OPTIONS");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return send(405, { ok: false, error: "Method not allowed" });
   }
 
   const { location, appointmentTypeId, date, calendarId, calendarID } = req.query || {};
   if (!appointmentTypeId) {
-    return res.status(400).json({ ok: false, error: "Missing appointmentTypeId" });
+    return send(400, { ok: false, error: "Missing appointmentTypeId" });
   }
 
   const normalizedLocation = normalizeLocation(location || "");
@@ -117,7 +127,7 @@ const handler = async (req, res) => {
   let resolvedCalendarId = explicitCalendarId;
 
   if (!normalizedLocation && resolvedCalendarId == null) {
-    return res.status(400).json({ ok: false, error: "Missing location or calendarId" });
+    return send(400, { ok: false, error: "Missing location or calendarId" });
   }
 
   try {
@@ -129,22 +139,25 @@ const handler = async (req, res) => {
       }
     }
   } catch (error) {
-    return res.status(502).json({ ok: false, error: error?.message || "Calendar lookup failed" });
+    logError("calendar lookup failed", { error: error?.message, account: activeAccount, location: normalizedLocation });
+    return send(502, { ok: false, error: error?.message || "Calendar lookup failed" });
   }
 
   if (resolvedCalendarId == null) {
-    return res.status(400).json({ ok: false, error: "Missing or unknown calendarId" });
+    logError("missing calendar id", { account: activeAccount, location: normalizedLocation });
+    return send(400, { ok: false, error: "Missing or unknown calendarId" });
   }
 
   const credentials = getCredentials(activeAccount);
   if (!credentials.user || !credentials.key) {
-    return res.status(500).json({ ok: false, error: "Missing Acuity credentials" });
+    logError("missing acuity credentials", { account: activeAccount });
+    return send(500, { ok: false, error: "Missing Acuity credentials" });
   }
 
   const tz = DEFAULT_TZ;
   const targetDate = (date || isoDateInTz(tz)).trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
-    return res.status(400).json({ ok: false, error: "Invalid date. Use YYYY-MM-DD." });
+    return send(400, { ok: false, error: "Invalid date. Use YYYY-MM-DD." });
   }
 
   res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
@@ -158,17 +171,25 @@ const handler = async (req, res) => {
   let response;
   try {
     response = await fetch(url, {
-      headers: { Authorization: buildAuthHeader(activeAccount) }
+      headers: { Authorization: buildAuthHeader(activeAccount), Accept: "application/json" }
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error?.message || "Request failed" });
+    logError("fetch threw", { error: error?.message, url: url.toString() });
+    return send(500, { ok: false, error: error?.message || "Request failed" });
   }
 
   const text = await response.text();
   if (!response.ok) {
-    return res
-      .status(response.status)
-      .json({ ok: false, error: text || `Acuity ${response.status}` });
+    logError("acuity response not ok", {
+      status: response.status,
+      url: url.toString(),
+      body: text
+    });
+    return send(response.status, {
+      ok: false,
+      error: text || `Acuity ${response.status}`,
+      acuityStatus: response.status
+    });
   }
 
   let times;
@@ -181,7 +202,7 @@ const handler = async (req, res) => {
   const entry = (CALENDAR_IDS[activeAccount] || {})[normalizedLocation] || null;
   const calendarLabel = entry?.label;
 
-  return res.status(200).json({
+  return send(200, {
     ok: true,
     account: activeAccount,
     location: normalizedLocation || undefined,
@@ -199,3 +220,4 @@ module.exports = handler;
 module.exports.config = { runtime: "nodejs20.x" };
 module.exports.CALENDAR_IDS = CALENDAR_IDS;
 module.exports.DEFAULT_TZ = DEFAULT_TZ;
+module.exports.ensureCalendarId = ensureCalendarId;

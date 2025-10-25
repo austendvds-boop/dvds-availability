@@ -1,3 +1,5 @@
+const { randomUUID } = require("crypto");
+
 const { DEFAULT_TZ, getCredentials, getCalendars } = require("../lib/acuity-client");
 
 const ALLOWED_ORIGINS = new Set([
@@ -18,13 +20,21 @@ const respondCors = (req, res) => {
 module.exports = async (req, res) => {
   respondCors(req, res);
 
+  const requestId = String(req.headers["x-request-id"] || randomUUID());
+  res.setHeader("X-Request-Id", requestId);
+
+  const send = (status, payload) => res.status(status).json({ requestId, ...payload });
+  const logError = (message, meta = {}) => {
+    console.error(`[calendars] ${message}`, { requestId, ...meta });
+  };
+
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET, OPTIONS");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return send(405, { ok: false, error: "Method not allowed" });
   }
 
   const accountParam = String(req.query?.account || "");
@@ -32,14 +42,15 @@ module.exports = async (req, res) => {
 
   const credentials = getCredentials(account);
   if (!credentials.user || !credentials.key) {
-    return res.status(500).json({ ok: false, error: "Missing Acuity credentials" });
+    logError("missing acuity credentials", { account });
+    return send(500, { ok: false, error: "Missing Acuity credentials" });
   }
 
   res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
   try {
     const calendars = await getCalendars(account);
-    return res.status(200).json({
+    return send(200, {
       ok: true,
       account,
       timezone: DEFAULT_TZ,
@@ -47,9 +58,8 @@ module.exports = async (req, res) => {
       calendars
     });
   } catch (error) {
-    return res
-      .status(502)
-      .json({ ok: false, error: error?.message || "Failed to load calendars" });
+    logError("calendar fetch failed", { account, error: error?.message });
+    return send(502, { ok: false, error: error?.message || "Failed to load calendars" });
   }
 };
 
