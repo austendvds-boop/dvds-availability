@@ -13,10 +13,10 @@ This repo exposes zero-config Vercel serverless functions for Deer Valley Drivin
 - [`GET /api/availability?location=scottsdale&appointmentTypeId=50529778`](https://dvds-availability.vercel.app/api/availability?location=scottsdale&appointmentTypeId=50529778) – Fetches availability, defaulting the date to “today” in America/Phoenix. Supply `calendarID` directly if you already have the numeric ID, or add `account=parents` to force the parents account.
 - [`GET /api/location-availability?location=scottsdale&appointmentTypeId=50529778&days=2`](https://dvds-availability.vercel.app/api/location-availability?location=scottsdale&appointmentTypeId=50529778&days=2) – Pools multiple calendars for a single location, merging slots across instructors for up to 7 consecutive days. Accepts `account`, `calendarID`, `date` (defaults to today), and `days` (1–7).
 - [`GET /api/month-availability?location=scottsdale&date=2025-10-01`](https://dvds-availability.vercel.app/api/month-availability?location=scottsdale&date=2025-10-01) – Returns a month-long map of pooled slot counts by day for the requested location. The handler infers `appointmentTypeId` from the configured city map when omitted and exposes diagnostics about the calendar sources it used.
-- [`GET /api/resolve-location?account=main&location=scottsdale`](https://dvds-availability.vercel.app/api/resolve-location?account=main&location=scottsdale) – Diagnostics endpoint that reports which calendar identifiers are configured for a location and which numeric IDs were resolved.
+- [`GET /api/resolve-location?account=main&location=scottsdale`](https://dvds-availability.vercel.app/api/resolve-location?account=main&location=scottsdale) – Diagnostics endpoint that reports which calendar identifiers are configured for a location and which numeric IDs survive strict validation.
 - [`GET /api/resolve-city?account=main&location=scottsdale`](https://dvds-availability.vercel.app/api/resolve-city?account=main&location=scottsdale) – Diagnostics endpoint that reveals the appointment type configured for a location and whether Acuity still exposes it for the chosen account.
 
-Every response includes `requestId` for easier log correlation. CORS allows the production domains (`www.deervalleydrivingschool.com` and `dvds-availability.vercel.app`).
+CORS allows the production domains (`www.deervalleydrivingschool.com` and `dvds-availability.vercel.app`).
 
 ## Maintaining city mappings
 
@@ -53,10 +53,10 @@ After saving `location-config.json`, redeploy and call `/api/resolve-location?ac
 
 - `configuredIds` – the numeric IDs sourced directly from `location-config.json`
 - `typeCalendarIds` – calendars Acuity says are enabled for the appointment type (if Acuity exposes that metadata)
-- `resolvedIds` – the final intersection used for availability requests
+- `intersection` – the final ID list after intersecting the strict config with the appointment type’s allow list
 - `disallowed` – configured IDs that are currently not enabled for the appointment type (update the type in Acuity if you see values here)
 
-The production UI on `/` surfaces the same diagnostics under the “Pool availability by location” panel, alongside the appointment type resolver, so you can confirm the configuration without leaving the dashboard. The new month view card at the bottom of the page calls `/api/month-availability`, paints a calendar grid of pooled slot counts, and lets you click a day to drill into the exact times using `/api/location-availability`.
+The production UI on `/` surfaces the same diagnostics directly beneath the “Fetch pooled availability” controls, so you can confirm the configuration without leaving the dashboard. The month view card underneath calls `/api/month-availability`, paints a calendar grid of pooled slot counts, and lets you click a day to drill into the exact times using `/api/location-availability`.
 
 ## Troubleshooting 403 responses
 
@@ -82,4 +82,3 @@ The UI now appends a reminder to enable the appointment type whenever a `403` re
    curl "https://dvds-availability.vercel.app/api/month-availability?location=scottsdale&date=2025-10-01"
    ```
 
-5. Use the returned `requestId` to trace requests in Vercel logs if Acuity responds with non-200 status codes.

@@ -1,59 +1,37 @@
-const { randomUUID } = require("crypto");
+const { applyCors, pickAccount, loadCityTypes, normalizeLocation } = require("./_acuity");
 
-const {
-  applyCors,
-  normalizeAccount,
-  normalizeLocation,
-  loadCityTypes,
-  listAppointmentTypes
-} = require("./_acuity");
-
-const handler = async (req, res) => {
+module.exports = async (req, res) => {
   applyCors(req, res);
 
-  const requestId = String(req.headers["x-request-id"] || randomUUID());
-  res.setHeader("X-Request-Id", requestId);
-
-  const send = (status, payload) => res.status(status).json({ requestId, ...payload });
-
   if (req.method === "OPTIONS") {
-    return res.status(204).end();
+    return res.status(200).end();
   }
 
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET, OPTIONS");
-    return send(405, { ok: false, error: "Method not allowed" });
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
+  const account = pickAccount(req.query);
   const cityTypes = loadCityTypes();
-  const account = normalizeAccount(req.query?.account || "main");
+  const bucket = cityTypes[account] || {};
+
+  if (String(req.query?.list || "") === "1") {
+    return res.status(200).json({
+      ok: true,
+      account,
+      cities: Object.keys(bucket)
+    });
+  }
+
   const city = normalizeLocation(req.query?.location || "");
+  const compact = city.replace(/\s+/g, "");
+  const typeId = bucket[city] || bucket[compact] || null;
 
-  if (!city) {
-    return send(400, { ok: false, error: "Missing location" });
-  }
-
-  const configuredMap = cityTypes[account] || {};
-  const configuredTypeId = configuredMap[city] || null;
-
-  let typeExists = false;
-  if (configuredTypeId) {
-    const types = await listAppointmentTypes(account).catch(() => null);
-    typeExists = Array.isArray(types)
-      ? types.some((type) => String(type?.id) === String(configuredTypeId))
-      : false;
-  }
-
-  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
-
-  return send(200, {
+  return res.status(200).json({
     ok: true,
     account,
-    city,
-    configuredTypeId,
-    typeExists
+    city: city || null,
+    typeId
   });
 };
-
-module.exports = handler;
-module.exports.config = { runtime: "nodejs20.x" };

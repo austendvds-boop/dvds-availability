@@ -1,6 +1,6 @@
 const { randomUUID } = require("crypto");
 
-const { applyCors, normalizeAccount, normalizeLocation, loadCityTypes, getConfiguredLocationEntries } = require("./_acuity");
+const { applyCors, normalizeAccount, normalizeLocation, loadCityTypes, getConfiguredLocationIds } = require("./_acuity");
 
 const ZIP_TO_CITY = {
   "85085": "anthem",
@@ -56,13 +56,13 @@ const buildLocationConfig = () => {
     const compactKey = normalizedKey.replace(/\s+/g, "");
     const appointmentTypeId =
       appointmentMap[normalizedKey] || appointmentMap[compactKey] || null;
-    const configured = getConfiguredLocationEntries(inferredAccount, normalizedKey);
+    const configured = getConfiguredLocationIds(inferredAccount, normalizedKey);
     config[normalizedKey] = {
       label: labelCandidate,
       appointmentTypeId,
       account: normalizeAccount(inferredAccount),
-      configuredCalendarIds: configured.numeric || [],
-      configuredCalendarNames: configured.names || []
+      configuredCalendarIds: configured.configuredIds || [],
+      unresolvedEntries: configured.unresolved || []
     };
   };
 
@@ -121,8 +121,10 @@ const handler = async (req, res) => {
   }
 
   const account = normalizeAccount(config.account);
-  const configured = getConfiguredLocationEntries(account, cityKey);
-  const primaryId = Array.isArray(configured.numeric) && configured.numeric.length ? configured.numeric[0] : null;
+  const configured = getConfiguredLocationIds(account, cityKey);
+  const primaryId = Array.isArray(configured.configuredIds) && configured.configuredIds.length
+    ? configured.configuredIds[0]
+    : null;
 
   res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
@@ -133,8 +135,8 @@ const handler = async (req, res) => {
     calendar: config.label,
     calendarId: primaryId,
     calendarSource: primaryId != null ? "config" : undefined,
-    configuredCalendarIds: configured.numeric || [],
-    configuredCalendarNames: configured.names || [],
+    configuredCalendarIds: configured.configuredIds || [],
+    unresolvedConfiguredEntries: configured.unresolved || [],
     appointmentTypeId: config.appointmentTypeId,
     account
   });

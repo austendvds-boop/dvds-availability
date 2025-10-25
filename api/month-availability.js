@@ -1,171 +1,164 @@
-const { randomUUID } = require("crypto");
-
 const {
   DEFAULT_TZ,
   applyCors,
-  normalizeAccount,
+  pickAccount,
   normalizeLocation,
   loadCityTypes,
   getTypeById,
+  resolveStrictCalendars,
   acuityFetch,
   addDaysISO,
   startOfMonthISO,
   daysInMonth
 } = require("./_acuity");
 
-const { resolveConfiguredCalendars } = require("./location-availability");
+const todayISO = () =>
+  new Date().toLocaleDateString("en-CA", { timeZone: DEFAULT_TZ });
 
-const inferAccountFromLocation = (cityTypes, providedAccount, locationKey) => {
-  if (providedAccount) return normalizeAccount(providedAccount);
-  const normalizedLocation = normalizeLocation(locationKey || "");
-  if (!normalizedLocation) return "main";
-  if (cityTypes.parents?.[normalizedLocation]) return "parents";
-  const compact = normalizedLocation.replace(/\s+/g, "");
-  if (cityTypes.parents?.[compact]) return "parents";
-  if (cityTypes.main?.[normalizedLocation]) return "main";
-  if (cityTypes.main?.[compact]) return "main";
-  return "main";
-};
-
-const resolveAppointmentTypeId = (cityTypes, account, locationKey, explicitType) => {
-  if (explicitType) {
-    return { id: String(explicitType), source: "query" };
-  }
-  const normalizedLocation = normalizeLocation(locationKey || "");
-  if (!normalizedLocation) {
-    return { id: null, source: null };
-  }
-  const map = cityTypes[account] || {};
-  const direct = map[normalizedLocation];
-  if (direct) {
-    return { id: String(direct), source: "city-types" };
-  }
-  const compact = normalizedLocation.replace(/\s+/g, "");
-  if (map[compact]) {
-    return { id: String(map[compact]), source: "city-types" };
-  }
-  return { id: null, source: null };
-};
+const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 
 module.exports = async (req, res) => {
   applyCors(req, res);
 
-  const requestId = String(req.headers["x-request-id"] || randomUUID());
-  res.setHeader("X-Request-Id", requestId);
-
-  const send = (status, payload) => res.status(status).json({ requestId, ...payload });
-
   if (req.method === "OPTIONS") {
-    return res.status(204).end();
+    return res.status(200).end();
   }
 
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET, OPTIONS");
-    return send(405, { ok: false, error: "Method not allowed" });
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const query = req.query || {};
-  const normalizedLocation = normalizeLocation(query.location || "");
-  if (!normalizedLocation) {
-    return send(400, { ok: false, error: "Missing location" });
+  const account = pickAccount(req.query);
+  const location = normalizeLocation(req.query?.location || "");
+  if (!location) {
+    return res.status(400).json({ ok: false, error: "Missing location" });
   }
 
   const cityTypes = loadCityTypes();
-  const account = inferAccountFromLocation(cityTypes, query.account, normalizedLocation);
-  const { id: appointmentTypeId, source: appointmentTypeSource } = resolveAppointmentTypeId(
-    cityTypes,
-    account,
-    normalizedLocation,
-    query.appointmentTypeId
-  );
+  const bucket = cityTypes[account] || {};
+  const compact = location.replace(/\s+/g, "");
+  const appointmentTypeId = req.query?.appointmentTypeId
+    ? String(req.query.appointmentTypeId)
+    : bucket[location] || bucket[compact] || null;
 
   if (!appointmentTypeId) {
-    return send(400, { ok: false, error: "Missing appointmentTypeId", account, location: normalizedLocation });
+    return res.status(400).json({
+      ok: false,
+      error: "Missing appointmentTypeId (configure city-types.json)",
+      account,
+      location
+    });
   }
 
-  const tz = DEFAULT_TZ;
-  const baseDate = String(query.date || "").trim() || new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()).replace(/\//g, "-");
-  const monthStart = startOfMonthISO(baseDate, tz);
-  const totalDays = daysInMonth(baseDate, tz);
+  const referenceDate = req.query?.date && isIsoDate(req.query.date)
+    ? req.query.date
+    : todayISO();
 
-  const typeInfo = await getTypeById(account, appointmentTypeId);
-  const calendarResolution = await resolveConfiguredCalendars(account, normalizedLocation, typeInfo);
+  if (!isIsoDate(referenceDate)) {
+    return res.status(400).json({ ok: false, error: "Invalid date" });
+  }
 
-  if (!calendarResolution.configured.length) {
-    return send(404, {
+  const monthStart = startOfMonthISO(referenceDate, DEFAULT_TZ);
+  const totalDays = daysInMonth(referenceDate, DEFAULT_TZ);
+
+  const typeInfo = await getTypeById(account, appointmentTypeId).catch(() => null);
+  const resolution = resolveStrictCalendars(account, location, typeInfo);
+
+  if (!resolution.configuredIds.length) {
+    return res.status(404).json({
       ok: false,
       error: "No calendars configured for this location (strict mode)",
       account,
-      location: normalizedLocation
+      location,
+      appointmentTypeId,
+      typeCalendarIds: resolution.typeCalendarIds,
+      unresolved: resolution.unresolved
     });
   }
 
-  if (!calendarResolution.ids.length) {
-    if (calendarResolution.typeCalendarIds.length) {
-      return send(400, {
-        ok: false,
-        error: "Configured calendars are not enabled for this appointment type in Acuity",
-        account,
-        location: normalizedLocation,
-        configured: calendarResolution.configured,
-        typeCalendarIds: calendarResolution.typeCalendarIds
-      });
-    }
-    return send(404, {
+  if (
+    resolution.typeCalendarIds.length &&
+    !resolution.finalIds.length
+  ) {
+    return res.status(400).json({
       ok: false,
-      error: "Configured calendar IDs could not be resolved",
+      error: "Configured calendars are not enabled for this appointment type in Acuity",
       account,
-      location: normalizedLocation,
-      unresolved: calendarResolution.unresolvedNames
+      location,
+      appointmentTypeId,
+      configuredCalendarIds: resolution.configuredIds,
+      typeCalendarIds: resolution.typeCalendarIds,
+      unresolved: resolution.unresolved,
+      disallowedConfiguredIds: resolution.disallowed
     });
   }
 
-  const byDate = {};
-  for (let i = 0; i < totalDays; i += 1) {
-    const day = addDaysISO(monthStart, i, tz);
-    byDate[day] = 0;
+  const activeCalendarIds = (resolution.finalIds.length
+    ? resolution.finalIds
+    : resolution.configuredIds
+  ).map((id) => Number(id));
+
+  if (!activeCalendarIds.length) {
+    return res.status(404).json({
+      ok: false,
+      error: "No calendars available after validation",
+      account,
+      location,
+      appointmentTypeId
+    });
   }
 
-  const baseUrl = "availability/times";
-  await Promise.all(
-    calendarResolution.ids.map(async (calendarId) => {
-      for (let i = 0; i < totalDays; i += 1) {
-        const date = addDaysISO(monthStart, i, tz);
-        try {
-          const times = await acuityFetch(account, baseUrl, {
-            calendarID: calendarId,
-            appointmentTypeID: appointmentTypeId,
-            date
-          });
-          if (Array.isArray(times) && times.length) {
-            const total = times.reduce((sum, entry) => sum + (Number(entry.slots) || 0), 0);
-            byDate[date] += total;
-          }
-        } catch (error) {
-          // ignore individual calendar failures; strict config prevents most invalid requests
+  const calendarSource = resolution.typeCalendarIds.length ? "type" : "config";
+  const byDate = {};
+  const errors = [];
+
+  for (let i = 0; i < totalDays; i += 1) {
+    const day = addDaysISO(monthStart, i, DEFAULT_TZ);
+    if (day) byDate[day] = 0;
+  }
+
+  for (const calendarID of activeCalendarIds) {
+    for (let i = 0; i < totalDays; i += 1) {
+      const day = addDaysISO(monthStart, i, DEFAULT_TZ);
+      if (!day) continue;
+      try {
+        const response = await acuityFetch(account, "availability/times", {
+          appointmentTypeID: appointmentTypeId,
+          calendarID,
+          date: day
+        });
+        if (Array.isArray(response) && response.length) {
+          const count = response.reduce((sum, entry) => sum + Number(entry.slots || 0), 0);
+          byDate[day] += count;
         }
+      } catch (error) {
+        errors.push({
+          calendarID,
+          date: day,
+          status: error?.status || 500,
+          message: error?.message || "Acuity request failed"
+        });
       }
-    })
-  );
+    }
+  }
 
   res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=600");
 
-  return send(200, {
+  return res.status(200).json({
     ok: true,
     account,
-    location: normalizedLocation,
+    location,
     appointmentTypeId,
-    appointmentTypeSource: appointmentTypeSource || undefined,
-    appointmentTypeName: typeInfo?.name,
+    calendarSource,
+    configuredCalendarIds: resolution.configuredIds,
+    typeCalendarIds: resolution.typeCalendarIds,
+    disallowedConfiguredIds: resolution.disallowed,
+    unresolvedConfiguredEntries: resolution.unresolved,
+    pooledCalendarIDs: activeCalendarIds,
     monthStart,
     days: totalDays,
-    calendarIDs: calendarResolution.ids,
-    configuredCalendars: calendarResolution.configured,
-    configuredIds: calendarResolution.configuredIds,
-    typeCalendarIds: calendarResolution.typeCalendarIds.length ? calendarResolution.typeCalendarIds : undefined,
-    unresolvedCalendars: calendarResolution.unresolvedNames.length ? calendarResolution.unresolvedNames : undefined,
-    byDate
+    byDate,
+    errors: errors.length ? errors : undefined
   });
 };
-
-module.exports.config = { runtime: "nodejs20.x" };
