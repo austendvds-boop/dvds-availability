@@ -1,6 +1,6 @@
 const { randomUUID } = require("crypto");
 
-const { applyCors, listCalendars, normalizeAccount } = require("./_acuity");
+const { applyCors, listAppointmentTypes, normalizeAccount } = require("./_acuity");
 
 const handler = async (req, res) => {
   applyCors(req, res);
@@ -22,13 +22,13 @@ const handler = async (req, res) => {
   const account = normalizeAccount(req.query?.account);
 
   try {
-    const calendars = await listCalendars(account);
-    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
-    return send(200, { ok: true, account, calendars });
+    const appointmentTypes = await listAppointmentTypes(account);
+    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+    return send(200, { ok: true, account, appointmentTypes });
   } catch (error) {
     return send(error?.status || 502, {
       ok: false,
-      error: error?.message || "Failed to load calendars",
+      error: error?.message || "Failed to load appointment types",
       account,
       acuityStatus: error?.status,
       acuityBody: error?.body

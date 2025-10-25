@@ -1,31 +1,33 @@
 # DVDs Availability API
 
-Production deployment: https://dvds-availability.vercel.app/
+Production: https://dvds-availability.vercel.app/
+
+This repo exposes zero-config Vercel serverless functions for Deer Valley Driving School. All handlers run on Node.js 20 and rely on Acuity Scheduling credentials that must be configured as environment variables in Vercel (`ACUITY_MAIN_USER_ID`, `ACUITY_MAIN_API_KEY`, `ACUITY_PARENTS_USER_ID`, `ACUITY_PARENTS_API_KEY`, and optionally aliases `ACUITY_USER_ID`, `ACUITY_API_KEY`). The default timezone is `America/Phoenix` (override with `TZ_DEFAULT`).
 
 ## Endpoints
 
-- [`GET /api/ping`](https://dvds-availability.vercel.app/api/ping) – health check returning `{ "ok": true, "message": "pong" }`.
-- [`GET /api/zip-route?zip=85254`](https://dvds-availability.vercel.app/api/zip-route?zip=85254) – resolve an Arizona ZIP to the nearest city calendar, appointment type, and cached calendar ID.
-- [`GET /api/calendars`](https://dvds-availability.vercel.app/api/calendars) – proxy to Acuity calendars for the main account (`?account=parents` switches credentials).
-- [`GET /api/availability?location=scottsdale&appointmentTypeId=50529778&date=2025-10-23`](https://dvds-availability.vercel.app/api/availability?location=scottsdale&appointmentTypeId=50529778&date=2025-10-23) – fetch availability for a city using the stored calendar ID (omit `date` to default to the current day in America/Phoenix).
+- [`GET /api/ping`](https://dvds-availability.vercel.app/api/ping) – Health check.
+- [`GET /api/calendars?account=main`](https://dvds-availability.vercel.app/api/calendars?account=main) – Cached pass-through to Acuity calendars (`?account=parents` for the second tenant).
+- [`GET /api/appointment-types?account=main`](https://dvds-availability.vercel.app/api/appointment-types?account=main) – Lists appointment types for the requested account.
+- [`GET /api/zip-route?zip=85254`](https://dvds-availability.vercel.app/api/zip-route?zip=85254) – Resolves an Arizona ZIP to the canonical location, account, appointment type, and cached calendar ID.
+- [`GET /api/availability?location=scottsdale&appointmentTypeId=50529778`](https://dvds-availability.vercel.app/api/availability?location=scottsdale&appointmentTypeId=50529778) – Fetches availability, defaulting the date to “today” in America/Phoenix. Supply `calendarID` directly if you already have the numeric ID, or add `account=parents` to force the parents account.
 
-Calendar IDs live in `api/availability.js` under the `CALENDAR_IDS` map. Update those values after calling `/api/calendars` for each account so Acuity lookups do not require a network round-trip on every request. When a value is `null`, the API will fall back to resolving the calendar ID dynamically and cache the result in memory for subsequent requests.
+Every response includes `requestId` for easier log correlation. CORS allows the production domains (`www.deervalleydrivingschool.com` and `dvds-availability.vercel.app`).
 
-All endpoints are zero-config Vercel serverless functions designed for the Deer Valley Driving School frontend.
+## Maintaining calendar IDs
 
-## Troubleshooting & verification
+`api/availability.js` stores a `CALENDAR_IDS` map for each account. Populate those numeric IDs by calling `/api/calendars` in production and copying the returned `id` values into the map. When a value is `null`, the handler falls back to live calendar lookups and caches the results in memory.
 
-1. Ensure the Acuity environment variables are present in Vercel (Preview + Production):
-   - `ACUITY_MAIN_USER_ID`, `ACUITY_MAIN_API_KEY`
-   - `ACUITY_PARENTS_USER_ID`, `ACUITY_PARENTS_API_KEY`
-   - `TZ_DEFAULT` (defaults to `America/Phoenix` when omitted)
-2. Call `/api/calendars` for each account and copy the numeric `id` values into `CALENDAR_IDS` inside `api/availability.js` so the router can return calendar IDs without a lookup.
-3. Verify live availability from a terminal (replace placeholders as needed):
+## Manual verification
+
+1. Ensure all required environment variables exist in Vercel (Production + Preview).
+2. Call `/api/calendars?account=main` and `/api/calendars?account=parents` to confirm both credentials return JSON with numeric `id` values.
+3. Call `/api/appointment-types?account=main` and make sure appointment type `50529778` exists.
+4. Fetch availability with both calendar ID and location resolution, e.g.
 
    ```bash
-   curl -i "https://dvds-availability.vercel.app/api/availability?location=scottsdale&appointmentTypeId=50529778"
+   curl "https://dvds-availability.vercel.app/api/availability?account=main&calendarID=<ID>&appointmentTypeId=50529778&date=2025-10-23"
+   curl "https://dvds-availability.vercel.app/api/availability?location=scottsdale&appointmentTypeId=50529778&date=2025-10-23"
    ```
 
-   The response will include an `X-Request-Id` header; use that identifier when tailing Vercel logs if Acuity returns a non-200 response.
-
-4. If a request fails, check the JSON payload for `requestId`, `error`, and (when applicable) `acuityStatus`, then open the matching serverless log entry in Vercel for more details.
+5. Use the returned `requestId` to trace requests in Vercel logs if Acuity responds with non-200 status codes.

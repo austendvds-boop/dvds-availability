@@ -1,49 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DVDs Availability API</title>
     <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
       body {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #0f172a;
-        color: #f8fafc;
         margin: 0;
-        padding: 0;
-        display: flex;
-        min-height: 100vh;
-        align-items: center;
-        justify-content: center;
+        padding: 2.5rem 1.5rem 4rem;
+        background: radial-gradient(circle at top, #f7f7f7, #e9eef7);
+        color: #1f2933;
       }
       main {
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        border-radius: 16px;
-        padding: 32px;
-        max-width: 720px;
-        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.6);
+        max-width: 800px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.92);
+        padding: 2.5rem;
+        border-radius: 24px;
+        box-shadow: 0 20px 40px rgba(15, 30, 60, 0.12);
+        backdrop-filter: blur(6px);
       }
       h1 {
-        font-size: 1.75rem;
         margin-top: 0;
+        font-size: clamp(2.2rem, 4vw, 3rem);
+        letter-spacing: -0.03em;
       }
       p {
         line-height: 1.6;
+        margin: 0 0 1.2rem;
       }
-      code {
-        background: rgba(15, 23, 42, 0.5);
-        padding: 2px 6px;
-        border-radius: 6px;
+      section {
+        margin-top: 2.5rem;
       }
       ul {
-        padding-left: 20px;
-      }
-      a {
-        color: #38bdf8;
+        padding-left: 1.4rem;
       }
       li + li {
-        margin-top: 8px;
+        margin-top: 0.5rem;
+      }
+      code {
+        background: rgba(15, 23, 42, 0.08);
+        padding: 0.15rem 0.35rem;
+        border-radius: 6px;
+        font-size: 0.95rem;
+      }
+      a {
+        color: #2563eb;
+      }
+      footer {
+        margin-top: 3rem;
+        font-size: 0.9rem;
+        color: #526173;
+        text-align: center;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: radial-gradient(circle at top, #0f172a, #111827);
+          color: #e2e8f0;
+        }
+        main {
+          background: rgba(17, 24, 39, 0.85);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+        code {
+          background: rgba(148, 163, 184, 0.18);
+        }
+        a {
+          color: #93c5fd;
+        }
+        footer {
+          color: #94a3b8;
+        }
       }
     </style>
   </head>
@@ -51,49 +82,67 @@
     <main>
       <h1>DVDs Availability API</h1>
       <p>
-        Zero-config serverless handlers serving Deer Valley Driving School. Use
-        the links below to verify production responses.
+        Zero-config serverless endpoints for Deer Valley Driving School. Each handler adds
+        CORS for the production domains, returns a <code>requestId</code> for log tracing, and
+        talks directly to the Acuity Scheduling API with credentials supplied via Vercel
+        environment variables.
       </p>
-      <ul>
-        <li>
-          <a href="/api/ping">GET /api/ping</a> – Health check returning
-          <code>{"ok": true}</code>
-        </li>
-        <li>
-          <a href="/api/zip-route?zip=85254">GET /api/zip-route</a> – ZIP
-          router returning the target city, appointment type, and cached
-          calendar ID
-        </li>
-        <li>
-          <a href="/api/calendars">GET /api/calendars</a> – Live calendars API
-          (`?account=parents` for the alternate credentials)
-        </li>
-        <li>
-          <a
-            href="/api/availability?location=scottsdale&amp;appointmentTypeId=50529778&amp;date=2025-10-23"
-            >GET /api/availability</a
-          >
-          – Dual-account Acuity availability proxy (defaults `date` to today in
-          America/Phoenix)
-        </li>
-      </ul>
-      <p>
-        Calendar IDs are stored in <code>api/availability.js</code>; update them
-        after calling <code>/api/calendars</code> for each account so responses
-        stay in sync with Acuity.
-      </p>
-      <p>
-        Every response includes an <code>X-Request-Id</code> header and embeds
-        the same <code>requestId</code> in the JSON body—grab that value when
-        checking Vercel logs for Acuity errors.
-      </p>
-      <p>
-        See the
-        <a href="https://github.com/austendvds-boop/dvds-availability/blob/main/README.md"
-          >README</a
-        >
-        for notes and example calls.
-      </p>
+
+      <section>
+        <h2>Live endpoints</h2>
+        <ul>
+          <li><a href="/api/ping">GET /api/ping</a> – health check.</li>
+          <li>
+            <a href="/api/calendars?account=main">GET /api/calendars?account=main</a>
+            – list calendars (`?account=parents` switches credentials).
+          </li>
+          <li>
+            <a href="/api/appointment-types?account=main">GET /api/appointment-types?account=main</a>
+            – list appointment types.
+          </li>
+          <li>
+            <a href="/api/zip-route?zip=85254">GET /api/zip-route?zip=85254</a>
+            – resolve ZIP to calendar metadata.
+          </li>
+          <li>
+            <a href="/api/availability?location=scottsdale&appointmentTypeId=50529778">
+              GET /api/availability?location=scottsdale&appointmentTypeId=50529778
+            </a>
+            – fetch availability (defaults date to today in America/Phoenix).
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Populate calendar IDs</h2>
+        <p>
+          The availability handler keeps a <code>CALENDAR_IDS</code> map under
+          <code>api/availability.js</code>. Copy the numeric calendar IDs from the calendars
+          endpoint into that map (for both <code>main</code> and <code>parents</code> accounts)
+          so future requests can skip the lookup round-trip.
+        </p>
+      </section>
+
+      <section>
+        <h2>Manual verification</h2>
+        <ol>
+          <li>Ensure Acuity credentials exist for both accounts in Vercel.</li>
+          <li>Hit <code>/api/calendars</code> and <code>/api/appointment-types</code> for each account.</li>
+          <li>
+            Fetch availability with a direct calendar ID:
+            <code>GET /api/availability?account=main&calendarID=&lt;ID&gt;&amp;appointmentTypeId=50529778&amp;date=2025-10-23</code>
+          </li>
+          <li>
+            Fetch availability with a location lookup:
+            <code>GET /api/availability?location=scottsdale&amp;appointmentTypeId=50529778&amp;date=2025-10-23</code>
+          </li>
+        </ol>
+      </section>
+
+      <footer>
+        Need the ZIP map expanded? Update <code>api/zip-route.js</code> or reach out for the
+        Phase 2 data load prompt.
+      </footer>
     </main>
   </body>
 </html>

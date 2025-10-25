@@ -1,12 +1,9 @@
 const { randomUUID } = require("crypto");
 
 const availability = require("./availability");
-const { CALENDAR_IDS, ensureCalendarId } = availability;
+const { applyCors, normalizeAccount } = require("./_acuity");
 
-const ALLOWED_ORIGINS = new Set([
-  "https://www.deervalleydrivingschool.com",
-  "https://dvds-availability.vercel.app"
-]);
+const { CALENDAR_IDS, ensureCalendarId } = availability;
 
 const ZIP_TO_CITY = {
   "85085": "anthem",
@@ -30,31 +27,18 @@ const LOCATION_CONFIG = {
 
 const FALLBACK_CITY = "scottsdale";
 
-const respondCors = (req, res) => {
-  const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-  res.setHeader("Vary", "Origin");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-};
-
 const normalizeZip = (value = "") => value.toString().trim();
 
 const handler = async (req, res) => {
-  respondCors(req, res);
+  applyCors(req, res);
 
   const requestId = String(req.headers["x-request-id"] || randomUUID());
   res.setHeader("X-Request-Id", requestId);
 
   const send = (status, payload) => res.status(status).json({ requestId, ...payload });
-  const logError = (message, meta = {}) => {
-    console.error(`[zip-route] ${message}`, { requestId, ...meta });
-  };
 
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
   if (req.method !== "GET") {
@@ -73,18 +57,20 @@ const handler = async (req, res) => {
     return send(404, { ok: false, error: `No calendar for ${cityKey}` });
   }
 
-  const calendarsForAccount = CALENDAR_IDS[config.account] || {};
-  const calendarEntry = calendarsForAccount[cityKey] || null;
+  const account = normalizeAccount(config.account);
+  const accountCalendars = CALENDAR_IDS[account] || {};
+  const calendarEntry = accountCalendars[cityKey] || null;
 
   let calendarId = calendarEntry?.calendarId ?? null;
   if (calendarId == null && typeof ensureCalendarId === "function") {
     try {
-      calendarId = await ensureCalendarId(config.account, cityKey);
+      calendarId = await ensureCalendarId(account, cityKey);
     } catch (error) {
-      logError("calendar lookup failed", {
-        cityKey,
-        account: config.account,
-        error: error?.message
+      return send(error?.status || 502, {
+        ok: false,
+        error: error?.message || "Calendar lookup failed",
+        account,
+        cityKey
       });
     }
   }
@@ -98,7 +84,7 @@ const handler = async (req, res) => {
     calendar: config.label,
     calendarId: calendarId ?? null,
     appointmentTypeId: config.appointmentTypeId,
-    account: config.account
+    account
   });
 };
 
