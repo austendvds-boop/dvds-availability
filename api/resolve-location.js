@@ -42,7 +42,11 @@ const handler = async (req, res) => {
   const account = normalizeAccount(accountParam || poolEntry.account || "main");
 
   try {
-    const { configured, ids, unresolvedNames } = await resolveLocationCalendars(account, normalizedLocation);
+    const { configured, configuredIds, configuredSource, ids, unresolvedNames } = await resolveLocationCalendars(
+      account,
+      normalizedLocation
+    );
+
     if (!configured.length) {
       return send(404, { ok: false, error: `No calendars configured for \"${normalizedLocation}\"`, account });
     }
@@ -53,6 +57,8 @@ const handler = async (req, res) => {
       account,
       location: normalizedLocation,
       configured,
+      configuredIds,
+      configuredSource,
       resolvedIds: ids,
       unresolved: unresolvedNames
     });

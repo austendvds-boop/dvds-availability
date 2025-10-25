@@ -18,11 +18,48 @@ Every response includes `requestId` for easier log correlation. CORS allows the 
 
 ## Maintaining calendar IDs
 
-`api/availability.js` stores a `CALENDAR_IDS` map for each account. Populate those numeric IDs by calling `/api/calendars` in production and copying the returned `id` values into the map. When a value is `null`, the handler falls back to live calendar lookups and caches the results in memory.
+### Step 1 – Capture live calendar IDs
 
-`location-config.json` (at the repo root) controls which calendar IDs belong to each location for the pooled availability endpoint. Add the numeric IDs under `main` and `parents` (if applicable). If an entry is empty, `/api/location-availability` falls back to the location names defined in `api/zip-route.js` until IDs are supplied.
+1. Call `/api/calendars?account=main` and `/api/calendars?account=parents` in production. Copy the numeric `id` values for the instructor calendars that belong to each city.
+2. Call `/api/appointment-types?account=main` and confirm appointment type `50529778` (or whichever type you care about) is available.
 
-`api/zip-route.js` exposes `LOCATION_CONFIG`, which includes the human-readable label, default account, and optional fallback calendar names used when `location-config.json` does not yet specify numeric IDs.
+### Step 2 – Populate `location-config.json`
+
+Update the root-level `location-config.json` so each location lists the numeric calendar IDs that should be pooled. Example shape:
+
+```json
+{
+  "main": {
+    "scottsdale": [11494752, 11494760],
+    "gilbert": [11494755]
+  },
+  "parents": {
+    "parents": [28722957]
+  }
+}
+```
+
+The APIs automatically prioritise the numeric IDs from this file. If an array is empty the handlers fall back to fuzzy name matching using the labels defined in `api/zip-route.js`.
+
+### Step 3 – Verify with diagnostics
+
+After saving `location-config.json`, redeploy and call `/api/resolve-location?account=main&location=scottsdale`. The response should include:
+
+- `configuredIds` – the numeric IDs sourced directly from `location-config.json`
+- `resolvedIds` – the IDs actually used to query Acuity (after any lookups)
+- `configuredSource` – `config` when the JSON file provided the IDs, `fallback` when name matching was required
+
+The production UI on `/` surfaces the same diagnostics under the “Pool availability by location” panel, so you can confirm the configuration without leaving the dashboard.
+
+## Troubleshooting 403 responses
+
+Acuity returns `403 Forbidden` when an appointment type is not enabled for a specific instructor calendar. If you see this in API responses or the dashboard:
+
+1. Open Acuity → **Appointments → Appointment Types** → select the relevant type (e.g. 50529778).
+2. Scroll to the **Calendars** section and ensure every instructor calendar you want to pool is checked.
+3. Save, wait a few seconds, then re-run the availability request.
+
+The UI now appends a reminder to enable the appointment type whenever a `403` response is returned.
 
 ## Manual verification
 

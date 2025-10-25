@@ -9,6 +9,8 @@ const {
   listCalendars
 } = require("./_acuity");
 
+const { getConfiguredIdentifiers } = require("../lib/location-config");
+
 const CALENDAR_IDS = {
   main: {
     anthem: { label: "Anthem", calendarId: null },
@@ -59,6 +61,14 @@ const ensureCalendarId = async (account, locationKey) => {
   const entry = accountCalendars[normalizedLocation];
   if (!entry) return null;
 
+  if (entry.calendarId == null) {
+    const { numeric } = getConfiguredIdentifiers(normalizedAccount, normalizedLocation);
+    if (numeric.length) {
+      entry.calendarId = numeric[0];
+      entry.calendarIdSource = "config";
+    }
+  }
+
   const cached = parseCalendarId(entry.calendarId);
   if (cached != null) {
     return cached;
@@ -81,6 +91,7 @@ const ensureCalendarId = async (account, locationKey) => {
   const resolved = parseCalendarId(match.id);
   if (resolved != null) {
     entry.calendarId = resolved;
+    entry.calendarIdSource = "lookup";
     return resolved;
   }
 
@@ -121,14 +132,34 @@ const handler = async (req, res) => {
   const normalizedLocation = normalizeLocation(location || "");
   const account = normalizeAccount(accountParam || normalizedLocation);
 
-  let resolvedCalendarId =
-    parseCalendarId(calendarId) != null
-      ? parseCalendarId(calendarId)
-      : parseCalendarId(calendarID);
+  const fromQuery = parseCalendarId(calendarId);
+  const fromQueryAlt = parseCalendarId(calendarID);
+
+  let resolvedCalendarId = fromQuery != null ? fromQuery : fromQueryAlt;
+  let calendarSource = resolvedCalendarId != null ? "query" : null;
+
+  if (resolvedCalendarId == null && normalizedLocation) {
+    const { numeric } = getConfiguredIdentifiers(account, normalizedLocation);
+    if (numeric.length) {
+      resolvedCalendarId = numeric[0];
+      calendarSource = "config";
+      const accountCalendars = CALENDAR_IDS[account] || {};
+      const entry = accountCalendars[normalizedLocation];
+      if (entry) {
+        entry.calendarId = resolvedCalendarId;
+        entry.calendarIdSource = "config";
+      }
+    }
+  }
 
   try {
     if (resolvedCalendarId == null && normalizedLocation) {
       resolvedCalendarId = await ensureCalendarId(account, normalizedLocation);
+      if (resolvedCalendarId != null && !calendarSource) {
+        const accountCalendars = CALENDAR_IDS[account] || {};
+        const entry = accountCalendars[normalizedLocation];
+        calendarSource = entry?.calendarIdSource || "lookup";
+      }
     }
   } catch (error) {
     const status = error?.status || 502;
@@ -168,6 +199,7 @@ const handler = async (req, res) => {
       account,
       location: normalizedLocation || undefined,
       calendarId: resolvedCalendarId,
+      calendarSource: calendarSource || undefined,
       appointmentTypeId,
       date: targetDate,
       times

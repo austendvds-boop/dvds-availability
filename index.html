@@ -202,17 +202,21 @@ const updatePoolDiagnostics = async () => {
       poolDiag.textContent = data.error || 'Failed to resolve location';
       return;
     }
+    const configuredIds = Array.isArray(data.configuredIds) ? data.configuredIds : [];
     const configured = Array.isArray(data.configured) ? data.configured : [];
     const resolved = Array.isArray(data.resolvedIds) ? data.resolvedIds : [];
     const unresolved = Array.isArray(data.unresolved) ? data.unresolved : [];
-    if (!configured.length && !resolved.length) {
+    if (!configuredIds.length && !configured.length && !resolved.length) {
       poolDiag.textContent = 'No calendars configured for this location.';
       return;
     }
     const asList = (values) => (values.length ? values.map((v) => String(v)).join(', ') : '—');
     let html = '';
-    html += `<div>Configured IDs: ${asList(configured)}</div>`;
+    html += `<div>Configured IDs: ${asList(configuredIds.length ? configuredIds : configured)}</div>`;
     html += `<div>Resolved IDs: ${asList(resolved)}</div>`;
+    if (data.configuredSource) {
+      html += `<div>Source: ${data.configuredSource}</div>`;
+    }
     if (unresolved.length) {
       html += `<div>Unresolved names: ${asList(unresolved)}</div>`;
     }
@@ -299,7 +303,11 @@ $('check').onclick = async () => {
     dbg.style.display = '';
     if (!data.ok) {
       meta.textContent = 'Error';
-      return showAvailabilityError(data.error || 'No data returned');
+      let message = data.error || 'No data returned';
+      if (data.acuityStatus === 403) {
+        message += '\nTip: enable this appointment type for the selected calendar inside Acuity.';
+      }
+      return showAvailabilityError(message);
     }
     const count = data.count ?? (Array.isArray(data.times) ? data.times.length : 0);
     meta.textContent = `Found ${count} slots`;

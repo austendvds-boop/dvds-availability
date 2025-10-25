@@ -2,6 +2,7 @@ const { randomUUID } = require("crypto");
 
 const availability = require("./availability");
 const { applyCors, normalizeAccount } = require("./_acuity");
+const { getConfiguredIdentifiers } = require("../lib/location-config");
 
 const { CALENDAR_IDS, ensureCalendarId } = availability;
 
@@ -107,10 +108,26 @@ const handler = async (req, res) => {
   const accountCalendars = CALENDAR_IDS[account] || {};
   const calendarEntry = accountCalendars[cityKey] || null;
 
-  let calendarId = calendarEntry?.calendarId ?? null;
+  const configured = getConfiguredIdentifiers(account, cityKey);
+  let calendarId = configured.numeric.length ? configured.numeric[0] : null;
+  let calendarSource = calendarId != null ? "config" : null;
+
+  if (calendarId == null && calendarEntry?.calendarId != null) {
+    const parsed = Number(calendarEntry.calendarId);
+    if (Number.isFinite(parsed)) {
+      calendarId = parsed;
+      calendarSource = calendarEntry.calendarIdSource || "cache";
+    }
+  }
+
   if (calendarId == null && typeof ensureCalendarId === "function") {
     try {
       calendarId = await ensureCalendarId(account, cityKey);
+      if (calendarEntry?.calendarIdSource && calendarId != null) {
+        calendarSource = calendarEntry.calendarIdSource;
+      } else if (calendarId != null && !calendarSource) {
+        calendarSource = "lookup";
+      }
     } catch (error) {
       return send(error?.status || 502, {
         ok: false,
@@ -129,6 +146,8 @@ const handler = async (req, res) => {
     cityKey,
     calendar: config.label,
     calendarId: calendarId ?? null,
+    calendarSource: calendarSource || undefined,
+    configuredCalendarIds: configured.numeric,
     appointmentTypeId: config.appointmentTypeId,
     account
   });
