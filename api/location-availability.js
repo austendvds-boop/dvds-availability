@@ -13,6 +13,13 @@ const {
 
 const { LOCATION_CONFIG } = require("./zip-route");
 
+let LOCATION_ID_CONFIG = {};
+try {
+  LOCATION_ID_CONFIG = require("../location-config.json");
+} catch (error) {
+  LOCATION_ID_CONFIG = {};
+}
+
 const buildLocationPools = () => {
   const entries = Object.entries(LOCATION_CONFIG || {}).map(([key, value]) => {
     const calendars = Array.isArray(value?.calendars) && value.calendars.length
@@ -120,6 +127,37 @@ const resolveCalendarIds = async (account, calendars) => {
   return { ids: unique, unresolvedNames: stillUnresolved };
 };
 
+const getConfiguredCalendars = (account, location) => {
+  const normalizedAccount = normalizeAccount(account);
+  const normalizedLocation = normalizeLocation(location);
+  if (!normalizedLocation) return [];
+
+  const accountConfig = LOCATION_ID_CONFIG?.[normalizedAccount];
+  const configured = Array.isArray(accountConfig?.[normalizedLocation])
+    ? [...accountConfig[normalizedLocation]]
+    : [];
+
+  if (configured.length) {
+    return configured;
+  }
+
+  const fallback = LOCATION_POOLS[normalizedLocation];
+  if (Array.isArray(fallback?.calendars) && fallback.calendars.length) {
+    return [...fallback.calendars];
+  }
+  if (fallback?.label) {
+    return [fallback.label];
+  }
+
+  return [];
+};
+
+const resolveLocationCalendars = async (account, location) => {
+  const configured = getConfiguredCalendars(account, location);
+  const resolution = await resolveCalendarIds(account, configured);
+  return { ...resolution, configured };
+};
+
 const handler = async (req, res) => {
   applyCors(req, res);
 
@@ -173,13 +211,16 @@ const handler = async (req, res) => {
 
   let calendarResolution;
   try {
-    calendarResolution = await resolveCalendarIds(account, locationConfig.calendars || []);
+    calendarResolution = await resolveLocationCalendars(account, normalizedLocation);
   } catch (error) {
     const status = error?.status || 502;
     return send(status, { ok: false, error: error?.message || "Failed to resolve calendars", account });
   }
 
-  const { ids: calendarIds, unresolvedNames } = calendarResolution;
+  const { ids: calendarIds, unresolvedNames, configured } = calendarResolution;
+  if (!configured.length) {
+    return send(404, { ok: false, error: `No calendars configured for \"${normalizedLocation}\"` });
+  }
   if (!calendarIds.length) {
     return send(404, { ok: false, error: `No calendar IDs resolved for \"${normalizedLocation}\"` });
   }
@@ -231,6 +272,7 @@ const handler = async (req, res) => {
     days,
     timezone: tz,
     pooledCalendarIds: calendarIds,
+    configuredCalendars: configured,
     unresolvedCalendars: unresolvedNames.length ? unresolvedNames : undefined,
     results,
     errors: calendarErrors.length ? calendarErrors : undefined
@@ -240,3 +282,5 @@ const handler = async (req, res) => {
 module.exports = handler;
 module.exports.config = { runtime: "nodejs20.x" };
 module.exports.LOCATION_POOLS = LOCATION_POOLS;
+module.exports.resolveLocationCalendars = resolveLocationCalendars;
+module.exports.getConfiguredCalendars = getConfiguredCalendars;

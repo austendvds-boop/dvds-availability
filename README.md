@@ -12,6 +12,7 @@ This repo exposes zero-config Vercel serverless functions for Deer Valley Drivin
 - [`GET /api/zip-route?zip=85254`](https://dvds-availability.vercel.app/api/zip-route?zip=85254) – Resolves an Arizona ZIP to the canonical location, account, appointment type, and cached calendar ID.
 - [`GET /api/availability?location=scottsdale&appointmentTypeId=50529778`](https://dvds-availability.vercel.app/api/availability?location=scottsdale&appointmentTypeId=50529778) – Fetches availability, defaulting the date to “today” in America/Phoenix. Supply `calendarID` directly if you already have the numeric ID, or add `account=parents` to force the parents account.
 - [`GET /api/location-availability?location=scottsdale&appointmentTypeId=50529778&days=2`](https://dvds-availability.vercel.app/api/location-availability?location=scottsdale&appointmentTypeId=50529778&days=2) – Pools multiple calendars for a single location, merging slots across instructors for up to 7 consecutive days. Accepts `account`, `calendarID`, `date` (defaults to today), and `days` (1–7).
+- [`GET /api/resolve-location?account=main&location=scottsdale`](https://dvds-availability.vercel.app/api/resolve-location?account=main&location=scottsdale) – Diagnostics endpoint that reports which calendar identifiers are configured for a location and which numeric IDs were resolved.
 
 Every response includes `requestId` for easier log correlation. CORS allows the production domains (`www.deervalleydrivingschool.com` and `dvds-availability.vercel.app`).
 
@@ -19,7 +20,9 @@ Every response includes `requestId` for easier log correlation. CORS allows the 
 
 `api/availability.js` stores a `CALENDAR_IDS` map for each account. Populate those numeric IDs by calling `/api/calendars` in production and copying the returned `id` values into the map. When a value is `null`, the handler falls back to live calendar lookups and caches the results in memory.
 
-`api/zip-route.js` exposes `LOCATION_CONFIG`, which now includes a `calendars` array for every location. Add each instructor’s calendar name or numeric ID to that array to enable pooled lookups in `/api/location-availability`.
+`location-config.json` (at the repo root) controls which calendar IDs belong to each location for the pooled availability endpoint. Add the numeric IDs under `main` and `parents` (if applicable). If an entry is empty, `/api/location-availability` falls back to the location names defined in `api/zip-route.js` until IDs are supplied.
+
+`api/zip-route.js` exposes `LOCATION_CONFIG`, which includes the human-readable label, default account, and optional fallback calendar names used when `location-config.json` does not yet specify numeric IDs.
 
 ## Manual verification
 

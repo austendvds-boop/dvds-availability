@@ -113,6 +113,7 @@
       <button id="poolFetch">Fetch pooled availability</button>
       <span id="poolMeta" class="badge" title="Click to toggle debug">waiting…</span>
     </div>
+    <div id="poolDiag" class="notice small"></div>
     <div id="poolSlots" class="slots"></div>
     <pre id="poolDebug" style="display:none"></pre>
   </div>
@@ -126,6 +127,7 @@ const dbg = $('debug');
 const poolMeta = $('poolMeta');
 const poolSlots = $('poolSlots');
 const poolDbg = $('poolDebug');
+const poolDiag = $('poolDiag');
 
 const attachBadgeToggle = (badge, output) => {
   if (!badge || !output) return;
@@ -179,8 +181,54 @@ if (poolLocation) {
     if (selected && selected.account) {
       poolAccount.value = selected.account;
     }
+    updatePoolDiagnostics();
   });
 }
+
+const updatePoolDiagnostics = async () => {
+  if (!poolDiag) return;
+  const account = poolAccount?.value;
+  const location = poolLocation?.value;
+  if (!location) {
+    poolDiag.textContent = 'Select a location to view configured calendars.';
+    return;
+  }
+  poolDiag.textContent = 'Resolving location calendars…';
+  try {
+    const params = new URLSearchParams({ account: account || 'main', location });
+    const response = await fetch(`/api/resolve-location?${params.toString()}`);
+    const data = await response.json();
+    if (!data.ok) {
+      poolDiag.textContent = data.error || 'Failed to resolve location';
+      return;
+    }
+    const configured = Array.isArray(data.configured) ? data.configured : [];
+    const resolved = Array.isArray(data.resolvedIds) ? data.resolvedIds : [];
+    const unresolved = Array.isArray(data.unresolved) ? data.unresolved : [];
+    if (!configured.length && !resolved.length) {
+      poolDiag.textContent = 'No calendars configured for this location.';
+      return;
+    }
+    const asList = (values) => (values.length ? values.map((v) => String(v)).join(', ') : '—');
+    let html = '';
+    html += `<div>Configured IDs: ${asList(configured)}</div>`;
+    html += `<div>Resolved IDs: ${asList(resolved)}</div>`;
+    if (unresolved.length) {
+      html += `<div>Unresolved names: ${asList(unresolved)}</div>`;
+    }
+    poolDiag.innerHTML = html;
+  } catch (error) {
+    poolDiag.textContent = error?.message || 'Failed to resolve location';
+  }
+};
+
+if (poolAccount) {
+  poolAccount.addEventListener('change', () => {
+    updatePoolDiagnostics();
+  });
+}
+
+updatePoolDiagnostics();
 
 const fmtLocal = (iso) => {
   try {
