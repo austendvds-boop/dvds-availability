@@ -1,7 +1,7 @@
 const { randomUUID } = require("crypto");
 
 const availability = require("./availability");
-const { applyCors, normalizeAccount } = require("./_acuity");
+const { applyCors, normalizeAccount, normalizeLocation, loadCityTypes } = require("./_acuity");
 const { getConfiguredIdentifiers } = require("../lib/location-config");
 
 const { CALENDAR_IDS, ensureCalendarId } = availability;
@@ -14,63 +14,82 @@ const ZIP_TO_CITY = {
   "85281": "tempe"
 };
 
-// Add additional instructor calendar names or numeric IDs to the calendars array per location.
-const LOCATION_CONFIG = {
-  anthem: {
-    label: "Anthem",
-    appointmentTypeId: "50529778",
-    account: "main",
-    calendars: ["Anthem"]
-  },
-  ahwatukee: {
-    label: "Ahwatukee",
-    appointmentTypeId: "50529778",
-    account: "main",
-    calendars: ["Ahwatukee"]
-  },
-  apachejunction: {
-    label: "Apache Junction",
-    appointmentTypeId: "50529778",
-    account: "main",
-    calendars: ["Apache Junction"]
-  },
-  chandler: {
-    label: "Chandler",
-    appointmentTypeId: "50529778",
-    account: "main",
-    calendars: ["Chandler"]
-  },
-  gilbert: {
-    label: "Gilbert",
-    appointmentTypeId: "50529778",
-    account: "main",
-    calendars: ["Gilbert"]
-  },
-  mesa: {
-    label: "Mesa",
-    appointmentTypeId: "50529778",
-    account: "main",
-    calendars: ["Mesa"]
-  },
-  scottsdale: {
-    label: "Scottsdale",
-    appointmentTypeId: "50529778",
-    account: "main",
-    calendars: ["Scottsdale"]
-  },
-  tempe: {
-    label: "Tempe",
-    appointmentTypeId: "50529778",
-    account: "main",
-    calendars: ["Tempe"]
-  },
-  parents: {
-    label: "Parents",
-    appointmentTypeId: "50529778",
-    account: "parents",
-    calendars: ["Parents"]
+const LOCATION_METADATA = [
+  { key: "anthem", label: "Anthem", account: "parents" },
+  { key: "ahwatukee", label: "Ahwatukee", account: "main" },
+  { key: "apache junction", label: "Apache Junction", account: "main" },
+  { key: "casa grande", label: "Casa Grande", account: "main" },
+  { key: "cave creek", label: "Cave Creek", account: "main" },
+  { key: "downtown phoenix", label: "Downtown Phoenix", account: "main" },
+  { key: "gilbert", label: "Gilbert", account: "main" },
+  { key: "mesa", label: "Mesa", account: "main" },
+  { key: "queen creek", label: "Queen Creek", account: "main" },
+  { key: "san tan valley", label: "San Tan Valley", account: "main" },
+  { key: "scottsdale", label: "Scottsdale", account: "main" },
+  { key: "tempe", label: "Tempe", account: "main" },
+  { key: "chandler", label: "Chandler", account: "main" },
+  { key: "glendale", label: "Glendale", account: "parents" },
+  { key: "north phoenix", label: "North Phoenix", account: "parents" },
+  { key: "peoria", label: "Peoria", account: "parents" },
+  { key: "sun city", label: "Sun City", account: "parents" },
+  { key: "surprise", label: "Surprise", account: "parents" },
+  { key: "parents", label: "Parents", account: "parents" }
+];
+
+const titleCase = (value = "") =>
+  value
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const buildLocationConfig = () => {
+  const cityTypes = loadCityTypes();
+  const config = {};
+
+  const ensureEntry = (rawKey, meta = {}) => {
+    const normalizedKey = normalizeLocation(rawKey);
+    if (!normalizedKey) return;
+    const baseMeta = LOCATION_METADATA.find(
+      (entry) => normalizeLocation(entry.key) === normalizedKey
+    ) || { account: meta.account, label: meta.label };
+    const accountCandidate = meta.account || baseMeta.account;
+    const inferredAccount = accountCandidate || (cityTypes.parents?.[normalizedKey] ? "parents" : "main");
+    const labelCandidate = meta.label || baseMeta.label || titleCase(normalizedKey);
+    const appointmentMap = cityTypes[inferredAccount] || {};
+    const compactKey = normalizedKey.replace(/\s+/g, "");
+    const appointmentTypeId =
+      appointmentMap[normalizedKey] || appointmentMap[compactKey] || null;
+    const calendars = baseMeta.calendars || (labelCandidate ? [labelCandidate] : []);
+    config[normalizedKey] = {
+      label: labelCandidate,
+      appointmentTypeId,
+      account: normalizeAccount(inferredAccount),
+      calendars
+    };
+  };
+
+  LOCATION_METADATA.forEach((meta) => ensureEntry(meta.key, meta));
+
+  for (const [accountKey, locations] of Object.entries(cityTypes || {})) {
+    for (const key of Object.keys(locations || {})) {
+      if (!config[key]) {
+        ensureEntry(key, { account: accountKey });
+      }
+    }
   }
+
+  for (const [key, value] of Object.entries({ ...config })) {
+    const compact = key.replace(/\s+/g, "");
+    if (compact && compact !== key && !config[compact]) {
+      config[compact] = value;
+    }
+  }
+
+  return config;
 };
+
+const LOCATION_CONFIG = buildLocationConfig();
 
 const FALLBACK_CITY = "scottsdale";
 

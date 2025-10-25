@@ -8,7 +8,9 @@ const {
   listCalendars,
   acuityFetch,
   groupTimesMerge,
-  addDaysISO
+  addDaysISO,
+  loadCityTypes,
+  getTypeById
 } = require("./_acuity");
 
 const { LOCATION_CONFIG } = require("./zip-route");
@@ -121,6 +123,55 @@ const resolveCalendarIds = async (account, calendars) => {
   return { ids: unique, unresolvedNames: stillUnresolved };
 };
 
+const dedupeIdentifiers = (values = []) => {
+  const seen = new Set();
+  const result = [];
+  for (const value of values) {
+    const key = typeof value === "string" ? `s:${value}` : `n:${value}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(value);
+    }
+  }
+  return result;
+};
+
+const extractTypeCalendarCandidates = (type) => {
+  if (!type) return { raw: [], numeric: [], names: [] };
+  const collected = [];
+  const push = (value) => {
+    const parsed = parseCalendarIdentifier(value);
+    if (parsed != null) {
+      collected.push(parsed);
+    }
+  };
+
+  if (Array.isArray(type.calendarIDs)) {
+    type.calendarIDs.forEach(push);
+  }
+  if (Array.isArray(type.calendarIds)) {
+    type.calendarIds.forEach(push);
+  }
+  if (Array.isArray(type.calendars)) {
+    type.calendars.forEach((calendar) => {
+      push(calendar?.id);
+      push(calendar?.calendarID);
+      push(calendar?.calendarId);
+      if (calendar?.name) {
+        push(calendar.name);
+      }
+    });
+  }
+
+  const raw = dedupeIdentifiers(collected);
+  const numeric = raw.filter((value) => typeof value === "number");
+  const names = raw.filter((value) => typeof value === "string");
+
+  return { raw, numeric, names };
+};
+
+const extractTypeCalendarIds = (type) => extractTypeCalendarCandidates(type).numeric;
+
 const getFallbackCalendars = (location) => {
   const fallback = LOCATION_POOLS[normalizeLocation(location)];
   if (!fallback) return [];
@@ -131,25 +182,103 @@ const getFallbackCalendars = (location) => {
   return calendars;
 };
 
-const resolveLocationCalendars = async (account, location) => {
+const inferAccountFromLocation = (cityTypes, providedAccount, locationKey, defaultAccount) => {
+  if (providedAccount) return normalizeAccount(providedAccount);
+  const normalizedLocation = normalizeLocation(locationKey || "");
+  if (!normalizedLocation) return normalizeAccount(defaultAccount || "main");
+  if (cityTypes.parents?.[normalizedLocation]) return "parents";
+  const compact = normalizedLocation.replace(/\s+/g, "");
+  if (cityTypes.parents?.[compact]) return "parents";
+  if (cityTypes.main?.[normalizedLocation]) return "main";
+  if (cityTypes.main?.[compact]) return "main";
+  return normalizeAccount(defaultAccount || "main");
+};
+
+const resolveAppointmentTypeId = (cityTypes, account, locationKey, explicitType) => {
+  if (explicitType) {
+    return { id: String(explicitType), source: "query" };
+  }
+  const normalizedLocation = normalizeLocation(locationKey || "");
+  if (!normalizedLocation) {
+    return { id: null, source: null };
+  }
+  const map = cityTypes[account] || {};
+  const direct = map[normalizedLocation];
+  if (direct) {
+    return { id: String(direct), source: "city-types" };
+  }
+  const compact = normalizedLocation.replace(/\s+/g, "");
+  if (map[compact]) {
+    return { id: String(map[compact]), source: "city-types" };
+  }
+  return { id: null, source: null };
+};
+
+const resolveLocationCalendars = async (account, location, { appointmentTypeId, typeInfo } = {}) => {
   const normalizedAccount = normalizeAccount(account);
   const normalizedLocation = normalizeLocation(location);
 
-  const { raw, numeric } = getConfiguredIdentifiers(normalizedAccount, normalizedLocation);
-  const usingConfig = raw.length > 0;
+  const configured = getConfiguredIdentifiers(normalizedAccount, normalizedLocation);
+  const candidateSets = [];
 
-  const calendars = usingConfig ? [...raw] : getFallbackCalendars(normalizedLocation);
+  if (configured.raw.length) {
+    candidateSets.push({ source: "config", values: configured.raw });
+  }
 
-  const resolution = await resolveCalendarIds(normalizedAccount, calendars);
+  const typeCandidates = extractTypeCalendarCandidates(typeInfo);
+  if (appointmentTypeId && typeCandidates.raw.length) {
+    candidateSets.push({ source: "type", values: typeCandidates.raw, typeCalendars: typeInfo?.calendars || [] });
+  }
 
-  const configuredIds = usingConfig ? numeric : [];
+  const fallbackCandidates = getFallbackCalendars(normalizedLocation);
+  if (fallbackCandidates.length) {
+    candidateSets.push({ source: "fallback", values: fallbackCandidates });
+  }
+
+  let resolved = { ids: [], unresolvedNames: [] };
+  let calendarSource = null;
+  let configuredUsed = [];
+  let unresolvedNames = [];
+  let typeCalendars = typeInfo?.calendars || [];
+  const typeCalendarIds = extractTypeCalendarIds(typeInfo);
+
+  for (const set of candidateSets) {
+    const attempt = await resolveCalendarIds(normalizedAccount, set.values);
+    if (set.source === "type" && set.typeCalendars) {
+      typeCalendars = set.typeCalendars;
+    }
+    if (attempt.ids.length) {
+      resolved = attempt;
+      calendarSource = set.source;
+      configuredUsed = set.values;
+      unresolvedNames = attempt.unresolvedNames;
+      break;
+    }
+    if (!configuredUsed.length) {
+      configuredUsed = set.values;
+      unresolvedNames = attempt.unresolvedNames;
+    }
+  }
+
+  if (!resolved.ids.length) {
+    const allCalendars = await listCalendars(normalizedAccount).catch(() => []);
+    const ids = (allCalendars || [])
+      .map((calendar) => parseCalendarIdentifier(calendar?.id))
+      .filter((value) => typeof value === "number" && Number.isFinite(value));
+    resolved = { ids: [...new Set(ids)], unresolvedNames: [] };
+    calendarSource = "all";
+    configuredUsed = (allCalendars || []).map((calendar) => calendar?.id).filter((value) => value != null);
+  }
 
   return {
-    ...resolution,
-    configured: calendars,
-    configuredIds,
-    configuredSource: usingConfig ? "config" : "fallback",
-    unresolvedNames: resolution.unresolvedNames
+    ids: resolved.ids,
+    unresolvedNames,
+    configured: configuredUsed,
+    configuredIds: configured.numeric,
+    configuredSource: calendarSource || (configured.raw.length ? "config" : "fallback"),
+    calendarSource: calendarSource || (configured.raw.length ? "config" : "fallback"),
+    typeCalendarIds,
+    typeCalendars
   };
 };
 
@@ -188,11 +317,22 @@ const handler = async (req, res) => {
     return send(404, { ok: false, error: `No calendars configured for \"${normalizedLocation}\"` });
   }
 
-  const account = normalizeAccount(accountParam || locationConfig.account || "main");
-  const appointmentTypeId = appointmentTypeParam || locationConfig.appointmentTypeId;
+  const cityTypes = loadCityTypes();
+  const account = inferAccountFromLocation(cityTypes, accountParam, normalizedLocation, locationConfig.account);
+
+  const { id: resolvedTypeId, source: appointmentTypeSource } = resolveAppointmentTypeId(
+    cityTypes,
+    account,
+    normalizedLocation,
+    appointmentTypeParam
+  );
+
+  const appointmentTypeId = resolvedTypeId || locationConfig.appointmentTypeId || null;
   if (!appointmentTypeId) {
     return send(400, { ok: false, error: "Missing appointmentTypeId" });
   }
+
+  const typeInfo = await getTypeById(account, appointmentTypeId);
 
   const tz = DEFAULT_TZ;
   const baseDate = (dateParam || isoDateInTz(tz)).trim();
@@ -206,16 +346,25 @@ const handler = async (req, res) => {
 
   let calendarResolution;
   try {
-    calendarResolution = await resolveLocationCalendars(account, normalizedLocation);
+    calendarResolution = await resolveLocationCalendars(account, normalizedLocation, {
+      appointmentTypeId,
+      typeInfo
+    });
   } catch (error) {
     const status = error?.status || 502;
     return send(status, { ok: false, error: error?.message || "Failed to resolve calendars", account });
   }
 
-  const { ids: calendarIds, unresolvedNames, configured, configuredIds, configuredSource } = calendarResolution;
-  if (!configured.length) {
-    return send(404, { ok: false, error: `No calendars configured for \"${normalizedLocation}\"` });
-  }
+  const {
+    ids: calendarIds,
+    unresolvedNames,
+    configured,
+    configuredIds,
+    configuredSource,
+    calendarSource,
+    typeCalendarIds,
+    typeCalendars
+  } = calendarResolution;
   if (!calendarIds.length) {
     return send(404, { ok: false, error: `No calendar IDs resolved for \"${normalizedLocation}\"` });
   }
@@ -264,12 +413,17 @@ const handler = async (req, res) => {
     account,
     location: normalizedLocation,
     appointmentTypeId,
+    appointmentTypeSource: appointmentTypeSource || (locationConfig.appointmentTypeId ? "location-config" : undefined),
+    appointmentTypeName: typeInfo?.name,
     days,
     timezone: tz,
     pooledCalendarIds: calendarIds,
+    calendarSource,
     configuredCalendars: configured,
     configuredIds,
     configuredSource,
+    typeCalendarIds: typeCalendarIds && typeCalendarIds.length ? typeCalendarIds : undefined,
+    typeCalendars: Array.isArray(typeCalendars) && typeCalendars.length ? typeCalendars : undefined,
     unresolvedCalendars: unresolvedNames.length ? unresolvedNames : undefined,
     results,
     errors: calendarErrors.length ? calendarErrors : undefined

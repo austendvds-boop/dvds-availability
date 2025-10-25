@@ -3,13 +3,38 @@ const { randomUUID } = require("crypto");
 const {
   applyCors,
   normalizeAccount,
-  normalizeLocation
+  normalizeLocation,
+  loadCityTypes,
+  getTypeById
 } = require("./_acuity");
 
 const {
   LOCATION_POOLS,
   resolveLocationCalendars
 } = require("./location-availability");
+
+const inferAccountFromLocation = (cityTypes, providedAccount, locationKey, fallbackAccount) => {
+  if (providedAccount) return normalizeAccount(providedAccount);
+  const normalizedLocation = normalizeLocation(locationKey || "");
+  if (!normalizedLocation) return normalizeAccount(fallbackAccount || "main");
+  if (cityTypes.parents?.[normalizedLocation]) return "parents";
+  const compact = normalizedLocation.replace(/\s+/g, "");
+  if (cityTypes.parents?.[compact]) return "parents";
+  if (cityTypes.main?.[normalizedLocation]) return "main";
+  if (cityTypes.main?.[compact]) return "main";
+  return normalizeAccount(fallbackAccount || "main");
+};
+
+const resolveCityTypeId = (cityTypes, account, locationKey) => {
+  const normalizedLocation = normalizeLocation(locationKey || "");
+  if (!normalizedLocation) return null;
+  const map = cityTypes[account] || {};
+  const direct = map[normalizedLocation];
+  if (direct) return String(direct);
+  const compact = normalizedLocation.replace(/\s+/g, "");
+  if (map[compact]) return String(map[compact]);
+  return null;
+};
 
 const handler = async (req, res) => {
   applyCors(req, res);
@@ -39,13 +64,27 @@ const handler = async (req, res) => {
     return send(404, { ok: false, error: `Unknown location \"${normalizedLocation}\"` });
   }
 
-  const account = normalizeAccount(accountParam || poolEntry.account || "main");
+  const cityTypes = loadCityTypes();
+  const account = inferAccountFromLocation(cityTypes, accountParam, normalizedLocation, poolEntry.account);
+
+  const configuredTypeId =
+    resolveCityTypeId(cityTypes, account, normalizedLocation) || poolEntry.appointmentTypeId || null;
+
+  const typeInfo = configuredTypeId ? await getTypeById(account, configuredTypeId) : null;
 
   try {
-    const { configured, configuredIds, configuredSource, ids, unresolvedNames } = await resolveLocationCalendars(
-      account,
-      normalizedLocation
-    );
+    const {
+      configured,
+      configuredIds,
+      configuredSource,
+      ids,
+      unresolvedNames,
+      calendarSource,
+      typeCalendarIds
+    } = await resolveLocationCalendars(account, normalizedLocation, {
+      appointmentTypeId: configuredTypeId,
+      typeInfo
+    });
 
     if (!configured.length) {
       return send(404, { ok: false, error: `No calendars configured for \"${normalizedLocation}\"`, account });
@@ -56,11 +95,15 @@ const handler = async (req, res) => {
       ok: true,
       account,
       location: normalizedLocation,
+      configuredTypeId,
+      typeExists: Boolean(typeInfo),
       configured,
       configuredIds,
       configuredSource,
+      calendarSource,
       resolvedIds: ids,
-      unresolved: unresolvedNames
+      unresolved: unresolvedNames,
+      typeCalendarIds: Array.isArray(typeCalendarIds) && typeCalendarIds.length ? typeCalendarIds : undefined
     });
   } catch (error) {
     const status = error?.status || 502;

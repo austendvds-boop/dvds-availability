@@ -19,6 +19,7 @@
     button:hover{background:#2d995a}
     .grid{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}
     .grid2{display:grid;gap:12px;grid-template-columns:repeat(2,1fr)}
+    .full{grid-column:1 / -1}
     @media (max-width:880px){.grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
     .row{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     .row button{flex:1 1 220px}
@@ -51,8 +52,9 @@
         </select>
       </div>
       <div>
-        <label>Appointment Type ID</label>
-        <input id="appt" placeholder="e.g. 50529778" value="50529778" />
+        <label>Location</label>
+        <select id="locationSelect"></select>
+        <div class="small">Selecting a location will auto-set account and type.</div>
       </div>
       <div>
         <label>Date</label>
@@ -61,13 +63,19 @@
     </div>
     <div class="grid2">
       <div>
-        <label>Find by Location (name contains)</label>
-        <input id="location" placeholder="e.g. Scottsdale or Tempe" />
-        <div class="small">Optional if you pick a calendar below.</div>
+        <label>Appointment Type ID</label>
+        <input id="appt" placeholder="e.g. 50529778" value="" />
       </div>
       <div>
         <label>Calendar</label>
         <select id="calendar"></select>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="full">
+        <label>Find by Location (name contains)</label>
+        <input id="location" placeholder="e.g. Scottsdale or Tempe" />
+        <div class="small">Optional if you pick a calendar below.</div>
       </div>
     </div>
     <div class="row">
@@ -75,6 +83,7 @@
       <button id="check">Fetch availability</button>
       <span id="meta" class="badge" title="Click to toggle debug">waiting…</span>
     </div>
+    <div id="typeMeta" class="small"></div>
     <div id="slots" class="slots"></div>
     <pre id="debug" style="display:none"></pre>
   </div>
@@ -113,6 +122,7 @@
       <button id="poolFetch">Fetch pooled availability</button>
       <span id="poolMeta" class="badge" title="Click to toggle debug">waiting…</span>
     </div>
+    <div id="poolTypeMeta" class="small"></div>
     <div id="poolDiag" class="notice small"></div>
     <div id="poolSlots" class="slots"></div>
     <pre id="poolDebug" style="display:none"></pre>
@@ -128,6 +138,11 @@ const poolMeta = $('poolMeta');
 const poolSlots = $('poolSlots');
 const poolDbg = $('poolDebug');
 const poolDiag = $('poolDiag');
+const typeMeta = $('typeMeta');
+const poolTypeMeta = $('poolTypeMeta');
+const locationSelect = $('locationSelect');
+const poolLocation = $('poolLocation');
+const poolAccount = $('poolAccount');
 
 const attachBadgeToggle = (badge, output) => {
   if (!badge || !output) return;
@@ -149,39 +164,194 @@ const setToday = (inputId) => {
 setToday('date');
 setToday('poolDate');
 
-const LOCATIONS = [
-  { key: 'anthem', label: 'Anthem', account: 'main' },
-  { key: 'ahwatukee', label: 'Ahwatukee', account: 'main' },
-  { key: 'apachejunction', label: 'Apache Junction', account: 'main' },
-  { key: 'chandler', label: 'Chandler', account: 'main' },
-  { key: 'gilbert', label: 'Gilbert', account: 'main' },
-  { key: 'mesa', label: 'Mesa', account: 'main' },
-  { key: 'scottsdale', label: 'Scottsdale', account: 'main' },
-  { key: 'tempe', label: 'Tempe', account: 'main' },
-  { key: 'parents', label: 'Parents', account: 'parents' }
-];
+const LOCATION_GROUPS = {
+  main: [
+    { value: 'ahwatukee', label: 'Ahwatukee' },
+    { value: 'apache junction', label: 'Apache Junction' },
+    { value: 'casa grande', label: 'Casa Grande' },
+    { value: 'cave creek', label: 'Cave Creek' },
+    { value: 'chandler', label: 'Chandler' },
+    { value: 'downtown phoenix', label: 'Downtown Phoenix' },
+    { value: 'gilbert', label: 'Gilbert' },
+    { value: 'mesa', label: 'Mesa' },
+    { value: 'queen creek', label: 'Queen Creek' },
+    { value: 'san tan valley', label: 'San Tan Valley' },
+    { value: 'scottsdale', label: 'Scottsdale' },
+    { value: 'tempe', label: 'Tempe' }
+  ],
+  parents: [
+    { value: 'anthem', label: 'Anthem' },
+    { value: 'glendale', label: 'Glendale' },
+    { value: 'north phoenix', label: 'North Phoenix' },
+    { value: 'peoria', label: 'Peoria' },
+    { value: 'sun city', label: 'Sun City' },
+    { value: 'surprise', label: 'Surprise' }
+  ]
+};
 
-const poolLocation = $('poolLocation');
-const poolAccount = $('poolAccount');
+const LOCATION_LOOKUP = new Map();
+
+const registerLocation = (value, label, account) => {
+  const normalized = value.toLowerCase();
+  const entry = { value: normalized, label, account };
+  LOCATION_LOOKUP.set(normalized, entry);
+  const compact = normalized.replace(/\s+/g, '');
+  if (compact !== normalized) {
+    LOCATION_LOOKUP.set(compact, entry);
+  }
+};
+
+const populateLocationSelect = (select, includePlaceholder = false) => {
+  if (!select) return;
+  select.innerHTML = '';
+  if (includePlaceholder) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select location…';
+    select.appendChild(placeholder);
+  }
+  Object.entries(LOCATION_GROUPS).forEach(([account, locations]) => {
+    if (!Array.isArray(locations) || !locations.length) return;
+    const group = document.createElement('optgroup');
+    group.label = account === 'parents' ? 'Parents account' : 'Main account';
+    locations.forEach((loc) => {
+      registerLocation(loc.value, loc.label, account);
+      const option = document.createElement('option');
+      option.value = loc.value;
+      option.textContent = loc.label;
+      group.appendChild(option);
+    });
+    select.appendChild(group);
+  });
+};
+
+populateLocationSelect(locationSelect, true);
+populateLocationSelect(poolLocation, false);
+
+const fetchCityType = async (account, location) => {
+  const params = new URLSearchParams({ account, location });
+  const response = await fetch(`/api/resolve-city?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`City resolver returned ${response.status}`);
+  }
+  return response.json();
+};
+
+const formatTypeMeta = (typeId, label, ok) => {
+  if (!typeId) return `No appointment type configured for ${label}.`;
+  return ok
+    ? `Using appointment type ${typeId} for ${label}.`
+    : `Configured type ${typeId} for ${label} is not enabled in Acuity.`;
+};
+
+const applyMainLocation = async (value) => {
+  if (!locationSelect) return;
+  if (!value) {
+    if (typeMeta) typeMeta.textContent = 'Select a location to auto-fill appointment type.';
+    return;
+  }
+  const info = LOCATION_LOOKUP.get(value);
+  if (!info) {
+    if (typeMeta) typeMeta.textContent = 'Unknown location selection.';
+    return;
+  }
+  const accountSelect = $('account');
+  if (accountSelect) accountSelect.value = info.account;
+  const locationInput = $('location');
+  if (locationInput) locationInput.value = info.label;
+  if (typeMeta) typeMeta.textContent = 'Resolving appointment type…';
+  try {
+    const data = await fetchCityType(info.account, info.value);
+    if (data?.configuredTypeId) {
+      $('appt').value = data.configuredTypeId;
+      if (typeMeta) typeMeta.textContent = formatTypeMeta(data.configuredTypeId, info.label, data.typeExists !== false);
+    } else if (typeMeta) {
+      typeMeta.textContent = `No appointment type configured for ${info.label}.`;
+    }
+  } catch (error) {
+    if (typeMeta) typeMeta.textContent = error?.message || 'Failed to resolve appointment type.';
+  }
+};
+
+const applyPoolLocation = async (value) => {
+  if (!poolLocation) return;
+  if (!value) {
+    if (poolTypeMeta) poolTypeMeta.textContent = 'Select a location to view pooled availability.';
+    return;
+  }
+  const info = LOCATION_LOOKUP.get(value);
+  if (!info) {
+    if (poolTypeMeta) poolTypeMeta.textContent = 'Unknown location selection.';
+    return;
+  }
+  if (poolAccount) poolAccount.value = info.account;
+  if (poolTypeMeta) poolTypeMeta.textContent = 'Resolving appointment type…';
+  try {
+    const data = await fetchCityType(info.account, info.value);
+    if (data?.configuredTypeId) {
+      $('poolAppt').value = data.configuredTypeId;
+      if (poolTypeMeta) poolTypeMeta.textContent = formatTypeMeta(data.configuredTypeId, info.label, data.typeExists !== false);
+    } else if (poolTypeMeta) {
+      poolTypeMeta.textContent = `No appointment type configured for ${info.label}.`;
+    }
+  } catch (error) {
+    if (poolTypeMeta) poolTypeMeta.textContent = error?.message || 'Failed to resolve appointment type.';
+  }
+  updatePoolDiagnostics();
+};
+
+const ensureMainType = async () => {
+  const typeInput = $('appt');
+  if (typeInput && typeInput.value.trim()) return;
+  if (locationSelect && locationSelect.value) {
+    await applyMainLocation(locationSelect.value);
+  }
+};
+
+const ensurePoolType = async () => {
+  const typeInput = $('poolAppt');
+  if (typeInput && typeInput.value.trim()) return;
+  if (poolLocation && poolLocation.value) {
+    await applyPoolLocation(poolLocation.value);
+  }
+};
+
+if (locationSelect) {
+  locationSelect.addEventListener('change', (event) => {
+    applyMainLocation(event.target.value);
+  });
+  const defaultMain = LOCATION_LOOKUP.has('scottsdale') ? 'scottsdale' : locationSelect.value;
+  if (defaultMain) {
+    locationSelect.value = defaultMain;
+    applyMainLocation(defaultMain);
+  }
+}
 
 if (poolLocation) {
-  poolLocation.innerHTML = '';
-  LOCATIONS.forEach((loc) => {
-    const option = document.createElement('option');
-    option.value = loc.key;
-    option.textContent = loc.label;
-    poolLocation.appendChild(option);
-  });
-  if (LOCATIONS.length) {
-    poolLocation.value = LOCATIONS[0].key;
-    poolAccount.value = LOCATIONS[0].account;
-  }
   poolLocation.addEventListener('change', (event) => {
-    const selected = LOCATIONS.find((loc) => loc.key === event.target.value);
-    if (selected && selected.account) {
-      poolAccount.value = selected.account;
-    }
+    applyPoolLocation(event.target.value);
+  });
+  const defaultPool = LOCATION_LOOKUP.has('scottsdale')
+    ? 'scottsdale'
+    : (poolLocation.value || (poolLocation.options[0] ? poolLocation.options[0].value : ''));
+  if (defaultPool) {
+    poolLocation.value = defaultPool;
+    applyPoolLocation(defaultPool);
+  } else {
     updatePoolDiagnostics();
+  }
+}
+if (!poolLocation) {
+  updatePoolDiagnostics();
+}
+
+if (poolAccount) {
+  poolAccount.addEventListener('change', () => {
+    if (poolLocation) {
+      applyPoolLocation(poolLocation.value);
+    } else {
+      updatePoolDiagnostics();
+    }
   });
 }
 
@@ -214,8 +384,17 @@ const updatePoolDiagnostics = async () => {
     let html = '';
     html += `<div>Configured IDs: ${asList(configuredIds.length ? configuredIds : configured)}</div>`;
     html += `<div>Resolved IDs: ${asList(resolved)}</div>`;
-    if (data.configuredSource) {
-      html += `<div>Source: ${data.configuredSource}</div>`;
+    if (data.configuredTypeId) {
+      const status = data.typeExists === false ? ' (not found in Acuity)' : '';
+      html += `<div>Appointment type: ${data.configuredTypeId}${status}</div>`;
+    }
+    if (data.calendarSource) {
+      html += `<div>Calendar source: ${data.calendarSource}</div>`;
+    } else if (data.configuredSource) {
+      html += `<div>Calendar source: ${data.configuredSource}</div>`;
+    }
+    if (Array.isArray(data.typeCalendarIds) && data.typeCalendarIds.length) {
+      html += `<div>Type calendars: ${asList(data.typeCalendarIds)}</div>`;
     }
     if (unresolved.length) {
       html += `<div>Unresolved names: ${asList(unresolved)}</div>`;
@@ -225,14 +404,6 @@ const updatePoolDiagnostics = async () => {
     poolDiag.textContent = error?.message || 'Failed to resolve location';
   }
 };
-
-if (poolAccount) {
-  poolAccount.addEventListener('change', () => {
-    updatePoolDiagnostics();
-  });
-}
-
-updatePoolDiagnostics();
 
 const fmtLocal = (iso) => {
   try {
@@ -289,12 +460,12 @@ $('load').onclick = async () => {
 $('check').onclick = async () => {
   meta.textContent = 'Fetching times…';
   clearAvailabilitySlots();
-  const account = $('account').value;
-  const appt = $('appt').value.trim();
   const date = $('date').value;
   const loc = $('location').value.trim();
   const cal = $('calendar').value;
-  const params = new URLSearchParams({ account, appointmentTypeId: appt, date });
+  await ensureMainType();
+  const account = $('account').value;
+  const params = new URLSearchParams({ account, appointmentTypeId: $('appt').value.trim(), date });
   if (cal) params.set('calendarID', cal); else if (loc) params.set('location', loc);
   try {
     const response = await fetch(`/api/availability?${params.toString()}`);
@@ -336,12 +507,12 @@ $('poolFetch').onclick = async () => {
   clearPoolSlots();
   poolDbg.textContent = '';
   poolDbg.style.display = 'none';
-  const account = poolAccount.value;
-  const location = poolLocation.value;
-  const appt = $('poolAppt').value.trim();
   const date = $('poolDate').value;
   const days = $('poolDays').value || '1';
-  const params = new URLSearchParams({ account, location, appointmentTypeId: appt, date, days });
+  await ensurePoolType();
+  const account = poolAccount.value;
+  const location = poolLocation.value;
+  const params = new URLSearchParams({ account, location, appointmentTypeId: $('poolAppt').value.trim(), date, days });
   try {
     const response = await fetch(`/api/location-availability?${params.toString()}`);
     const data = await response.json();

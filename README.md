@@ -13,19 +13,24 @@ This repo exposes zero-config Vercel serverless functions for Deer Valley Drivin
 - [`GET /api/availability?location=scottsdale&appointmentTypeId=50529778`](https://dvds-availability.vercel.app/api/availability?location=scottsdale&appointmentTypeId=50529778) – Fetches availability, defaulting the date to “today” in America/Phoenix. Supply `calendarID` directly if you already have the numeric ID, or add `account=parents` to force the parents account.
 - [`GET /api/location-availability?location=scottsdale&appointmentTypeId=50529778&days=2`](https://dvds-availability.vercel.app/api/location-availability?location=scottsdale&appointmentTypeId=50529778&days=2) – Pools multiple calendars for a single location, merging slots across instructors for up to 7 consecutive days. Accepts `account`, `calendarID`, `date` (defaults to today), and `days` (1–7).
 - [`GET /api/resolve-location?account=main&location=scottsdale`](https://dvds-availability.vercel.app/api/resolve-location?account=main&location=scottsdale) – Diagnostics endpoint that reports which calendar identifiers are configured for a location and which numeric IDs were resolved.
+- [`GET /api/resolve-city?account=main&location=scottsdale`](https://dvds-availability.vercel.app/api/resolve-city?account=main&location=scottsdale) – Diagnostics endpoint that reveals the appointment type configured for a location and whether Acuity still exposes it for the chosen account.
 
 Every response includes `requestId` for easier log correlation. CORS allows the production domains (`www.deervalleydrivingschool.com` and `dvds-availability.vercel.app`).
 
-## Maintaining calendar IDs
+## Maintaining city mappings
 
-### Step 1 – Capture live calendar IDs
+### Step 1 – Update `city-types.json`
+
+The root-level [`city-types.json`](./city-types.json) file maps each location to its default appointment type for both accounts. Use the IDs provided by the latest appointment type export (see the “Manual verification” section) and keep the keys lowercase. The UI and API automatically reference this map to select the correct appointment type whenever you choose a location.
+
+### Step 2 – Capture live calendar IDs
 
 1. Call `/api/calendars?account=main` and `/api/calendars?account=parents` in production. Copy the numeric `id` values for the instructor calendars that belong to each city.
-2. Call `/api/appointment-types?account=main` and confirm appointment type `50529778` (or whichever type you care about) is available.
+2. Call `/api/appointment-types?account=main` and confirm the IDs configured in `city-types.json` still exist.
 
-### Step 2 – Populate `location-config.json`
+### Step 3 – Populate `location-config.json`
 
-Update the root-level `location-config.json` so each location lists the numeric calendar IDs that should be pooled. Example shape:
+Update [`location-config.json`](./location-config.json) so each location lists the numeric calendar IDs that should be pooled. Example shape:
 
 ```json
 {
@@ -41,7 +46,7 @@ Update the root-level `location-config.json` so each location lists the numeric 
 
 The APIs automatically prioritise the numeric IDs from this file. If an array is empty the handlers fall back to fuzzy name matching using the labels defined in `api/zip-route.js`.
 
-### Step 3 – Verify with diagnostics
+### Step 4 – Verify with diagnostics
 
 After saving `location-config.json`, redeploy and call `/api/resolve-location?account=main&location=scottsdale`. The response should include:
 
@@ -49,7 +54,7 @@ After saving `location-config.json`, redeploy and call `/api/resolve-location?ac
 - `resolvedIds` – the IDs actually used to query Acuity (after any lookups)
 - `configuredSource` – `config` when the JSON file provided the IDs, `fallback` when name matching was required
 
-The production UI on `/` surfaces the same diagnostics under the “Pool availability by location” panel, so you can confirm the configuration without leaving the dashboard.
+The production UI on `/` surfaces the same diagnostics under the “Pool availability by location” panel, alongside the appointment type resolver, so you can confirm the configuration without leaving the dashboard.
 
 ## Troubleshooting 403 responses
 

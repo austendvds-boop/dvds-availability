@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+
 const API_BASE = "https://acuityscheduling.com/api/v1/";
 const DEFAULT_TZ = process.env.TZ_DEFAULT || "America/Phoenix";
 
@@ -112,6 +115,54 @@ const listAppointmentTypes = (account, { forceRefresh = false } = {}) => {
   return withCache(appointmentTypeCache, key, () => acuityFetch(key, "appointment-types"));
 };
 
+const CITY_TYPES_DEFAULT = { main: {}, parents: {} };
+
+const safeParse = (text) => {
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed : CITY_TYPES_DEFAULT;
+  } catch (error) {
+    return CITY_TYPES_DEFAULT;
+  }
+};
+
+const loadCityTypes = () => {
+  const filePath = path.join(process.cwd(), "city-types.json");
+  try {
+    const text = fs.readFileSync(filePath, "utf8");
+    const parsed = safeParse(text);
+    const normalised = { main: {}, parents: {} };
+    for (const account of Object.keys(parsed || {})) {
+      const normalizedAccount = normalizeAccount(account);
+      normalised[normalizedAccount] = normalised[normalizedAccount] || {};
+      const cities = parsed[account] || {};
+      for (const [city, typeId] of Object.entries(cities)) {
+        const key = normalizeLocation(city);
+        if (!key) continue;
+        const value = typeId != null ? String(typeId) : null;
+        if (value) {
+          normalised[normalizedAccount][key] = value;
+          const compact = key.replace(/\s+/g, "");
+          if (!normalised[normalizedAccount][compact]) {
+            normalised[normalizedAccount][compact] = value;
+          }
+        }
+      }
+    }
+    return normalised;
+  } catch (error) {
+    return CITY_TYPES_DEFAULT;
+  }
+};
+
+const getTypeById = async (account, typeId) => {
+  if (!typeId) return null;
+  const types = await listAppointmentTypes(account).catch(() => null);
+  if (!Array.isArray(types)) return null;
+  const target = String(typeId);
+  return types.find((type) => String(type?.id) === target) || null;
+};
+
 const applyCors = (req, res) => {
   const origin = req.headers.origin;
   if (origin && CORS_ORIGINS.has(origin)) {
@@ -175,5 +226,7 @@ module.exports = {
   groupTimesMerge,
   addDaysISO,
   TTL_MS,
-  CORS_ORIGINS
+  CORS_ORIGINS,
+  loadCityTypes,
+  getTypeById
 };

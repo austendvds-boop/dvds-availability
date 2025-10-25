@@ -1,15 +1,24 @@
 {
   "main": {
-    "anthem": [],
     "ahwatukee": [],
-    "apachejunction": [],
+    "apache junction": [],
+    "casa grande": [],
+    "cave creek": [],
     "chandler": [],
+    "downtown phoenix": [],
     "gilbert": [],
     "mesa": [],
+    "queen creek": [],
+    "san tan valley": [],
     "scottsdale": [],
     "tempe": []
   },
   "parents": {
-    "parents": []
+    "anthem": [],
+    "glendale": [],
+    "north phoenix": [],
+    "peoria": [],
+    "sun city": [],
+    "surprise": []
   }
 }
