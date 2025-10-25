@@ -83,6 +83,7 @@
       <button id="check">Fetch availability</button>
       <span id="meta" class="badge" title="Click to toggle debug">waiting…</span>
     </div>
+    <div id="mainDiag" class="notice small"></div>
     <div id="typeMeta" class="small"></div>
     <div id="slots" class="slots"></div>
     <pre id="debug" style="display:none"></pre>
@@ -155,6 +156,9 @@ const poolTypeMeta = $('poolTypeMeta');
 const locationSelect = $('locationSelect');
 const poolLocation = $('poolLocation');
 const poolAccount = $('poolAccount');
+const mainDiag = $('mainDiag');
+const mainFetchBtn = $('check');
+const poolFetchBtn = $('poolFetch');
 
 const attachBadgeToggle = (badge, output) => {
   if (!badge || !output) return;
@@ -256,15 +260,72 @@ const formatTypeMeta = (typeId, label, ok) => {
     : `Configured type ${typeId} for ${label} is not enabled in Acuity.`;
 };
 
+const describeList = (values) => (Array.isArray(values) && values.length ? values.map((v) => String(v)).join(', ') : '—');
+
+const fetchLocationDetails = async (account, location, appointmentTypeId) => {
+  const params = new URLSearchParams({ account, location });
+  if (appointmentTypeId) params.set('appointmentTypeId', appointmentTypeId);
+  const response = await fetch(`/api/resolve-location?${params.toString()}`);
+  const json = await response.json().catch(() => ({}));
+  return { status: response.status, json };
+};
+
+const updateMainDiagnostics = async (accountOverride, locationOverride) => {
+  if (!mainDiag) return;
+  const account = accountOverride || $('account')?.value || 'main';
+  const locationKey = locationOverride || ensureLocationKey();
+  const calendarSelect = $('calendar');
+  if (!locationKey) {
+    mainDiag.textContent = 'Select a location to resolve configured calendars.';
+    if (mainFetchBtn) mainFetchBtn.disabled = !calendarSelect?.value;
+    return;
+  }
+  mainDiag.textContent = 'Resolving location calendars…';
+  if (mainFetchBtn) mainFetchBtn.disabled = true;
+  try {
+    const appt = $('appt')?.value.trim();
+    const { status, json } = await fetchLocationDetails(account, locationKey, appt);
+    if (status !== 200 || !json.ok) {
+      mainDiag.textContent = json.error || `Failed to resolve location (HTTP ${status})`;
+      return;
+    }
+    const configuredIds = Array.isArray(json.configuredIds) ? json.configuredIds : [];
+    const configuredNames = Array.isArray(json.configuredNames) ? json.configuredNames : [];
+    const typeAllowed = Array.isArray(json.typeCalendarIds) ? json.typeCalendarIds : [];
+    const resolvedIds = Array.isArray(json.resolvedIds) ? json.resolvedIds : [];
+    const disallowed = Array.isArray(json.disallowed) ? json.disallowed : [];
+    const unresolved = Array.isArray(json.unresolvedNames) ? json.unresolvedNames : [];
+
+    let html = '';
+    html += `<div>Configured IDs (strict): ${describeList(configuredIds)}</div>`;
+    if (configuredNames.length) html += `<div>Configured names: ${describeList(configuredNames)}</div>`;
+    if (typeAllowed.length) html += `<div>Type-allowed IDs: ${describeList(typeAllowed)}</div>`;
+    html += `<div>Final IDs used: ${describeList(resolvedIds)}</div>`;
+    if (disallowed.length) html += `<div>Not enabled for this type: ${describeList(disallowed)}</div>`;
+    if (unresolved.length) html += `<div>Unresolved names: ${describeList(unresolved)}</div>`;
+    mainDiag.innerHTML = html;
+    if (mainFetchBtn) {
+      const hasExplicitCalendar = Boolean(calendarSelect && calendarSelect.value);
+      mainFetchBtn.disabled = !hasExplicitCalendar && resolvedIds.length === 0;
+    }
+  } catch (error) {
+    mainDiag.textContent = error?.message || 'Failed to resolve location calendars.';
+  }
+};
+
 const applyMainLocation = async (value) => {
   if (!locationSelect) return;
   if (!value) {
     if (typeMeta) typeMeta.textContent = 'Select a location to auto-fill appointment type.';
+    if (mainDiag) mainDiag.textContent = 'Select a location to resolve configured calendars.';
+    if (mainFetchBtn) mainFetchBtn.disabled = true;
     return;
   }
   const info = LOCATION_LOOKUP.get(value);
   if (!info) {
     if (typeMeta) typeMeta.textContent = 'Unknown location selection.';
+    if (mainDiag) mainDiag.textContent = 'Unknown location selection.';
+    if (mainFetchBtn) mainFetchBtn.disabled = true;
     return;
   }
   const accountSelect = $('account');
@@ -283,17 +344,22 @@ const applyMainLocation = async (value) => {
   } catch (error) {
     if (typeMeta) typeMeta.textContent = error?.message || 'Failed to resolve appointment type.';
   }
+  await updateMainDiagnostics(info.account, info.value);
 };
 
 const applyPoolLocation = async (value) => {
   if (!poolLocation) return;
   if (!value) {
     if (poolTypeMeta) poolTypeMeta.textContent = 'Select a location to view pooled availability.';
+    if (poolDiag) poolDiag.textContent = 'Select a location to view configured calendars.';
+    if (poolFetchBtn) poolFetchBtn.disabled = true;
     return;
   }
   const info = LOCATION_LOOKUP.get(value);
   if (!info) {
     if (poolTypeMeta) poolTypeMeta.textContent = 'Unknown location selection.';
+    if (poolDiag) poolDiag.textContent = 'Unknown location selection.';
+    if (poolFetchBtn) poolFetchBtn.disabled = true;
     return;
   }
   if (poolAccount) poolAccount.value = info.account;
@@ -359,7 +425,7 @@ if (!poolLocation) {
 
 if (poolAccount) {
   poolAccount.addEventListener('change', () => {
-    if (poolLocation) {
+    if (poolLocation && poolLocation.value) {
       applyPoolLocation(poolLocation.value);
     } else {
       updatePoolDiagnostics();
@@ -369,49 +435,38 @@ if (poolAccount) {
 
 const updatePoolDiagnostics = async () => {
   if (!poolDiag) return;
-  const account = poolAccount?.value;
+  const account = poolAccount?.value || 'main';
   const location = poolLocation?.value;
   if (!location) {
     poolDiag.textContent = 'Select a location to view configured calendars.';
+    if (poolFetchBtn) poolFetchBtn.disabled = true;
     return;
   }
   poolDiag.textContent = 'Resolving location calendars…';
+  if (poolFetchBtn) poolFetchBtn.disabled = true;
   try {
-    const params = new URLSearchParams({ account: account || 'main', location });
-    const response = await fetch(`/api/resolve-location?${params.toString()}`);
-    const data = await response.json();
-    if (!data.ok) {
-      poolDiag.textContent = data.error || 'Failed to resolve location';
+    const appt = $('poolAppt')?.value.trim();
+    const { status, json } = await fetchLocationDetails(account, location, appt);
+    if (status !== 200 || !json.ok) {
+      poolDiag.textContent = json.error || `Failed to resolve location (HTTP ${status})`;
       return;
     }
-    const configuredIds = Array.isArray(data.configuredIds) ? data.configuredIds : [];
-    const configured = Array.isArray(data.configured) ? data.configured : [];
-    const resolved = Array.isArray(data.resolvedIds) ? data.resolvedIds : [];
-    const unresolved = Array.isArray(data.unresolved) ? data.unresolved : [];
-    if (!configuredIds.length && !configured.length && !resolved.length) {
-      poolDiag.textContent = 'No calendars configured for this location.';
-      return;
-    }
-    const asList = (values) => (values.length ? values.map((v) => String(v)).join(', ') : '—');
+    const configuredIds = Array.isArray(json.configuredIds) ? json.configuredIds : [];
+    const configuredNames = Array.isArray(json.configuredNames) ? json.configuredNames : [];
+    const resolvedIds = Array.isArray(json.resolvedIds) ? json.resolvedIds : [];
+    const typeAllowed = Array.isArray(json.typeCalendarIds) ? json.typeCalendarIds : [];
+    const disallowed = Array.isArray(json.disallowed) ? json.disallowed : [];
+    const unresolved = Array.isArray(json.unresolvedNames) ? json.unresolvedNames : [];
+
     let html = '';
-    html += `<div>Configured IDs: ${asList(configuredIds.length ? configuredIds : configured)}</div>`;
-    html += `<div>Resolved IDs: ${asList(resolved)}</div>`;
-    if (data.configuredTypeId) {
-      const status = data.typeExists === false ? ' (not found in Acuity)' : '';
-      html += `<div>Appointment type: ${data.configuredTypeId}${status}</div>`;
-    }
-    if (data.calendarSource) {
-      html += `<div>Calendar source: ${data.calendarSource}</div>`;
-    } else if (data.configuredSource) {
-      html += `<div>Calendar source: ${data.configuredSource}</div>`;
-    }
-    if (Array.isArray(data.typeCalendarIds) && data.typeCalendarIds.length) {
-      html += `<div>Type calendars: ${asList(data.typeCalendarIds)}</div>`;
-    }
-    if (unresolved.length) {
-      html += `<div>Unresolved names: ${asList(unresolved)}</div>`;
-    }
+    html += `<div>Configured IDs (strict): ${describeList(configuredIds)}</div>`;
+    if (configuredNames.length) html += `<div>Configured names: ${describeList(configuredNames)}</div>`;
+    if (typeAllowed.length) html += `<div>Type-allowed IDs: ${describeList(typeAllowed)}</div>`;
+    html += `<div>Final IDs used: ${describeList(resolvedIds)}</div>`;
+    if (disallowed.length) html += `<div>Not enabled for this type: ${describeList(disallowed)}</div>`;
+    if (unresolved.length) html += `<div>Unresolved names: ${describeList(unresolved)}</div>`;
     poolDiag.innerHTML = html;
+    if (poolFetchBtn) poolFetchBtn.disabled = resolvedIds.length === 0;
   } catch (error) {
     poolDiag.textContent = error?.message || 'Failed to resolve location';
   }
@@ -768,11 +823,31 @@ nextMonthBtn?.addEventListener('click', () => {
 $('account')?.addEventListener('change', () => {
   currentMonthISO = currentMonthISO || `${todayIso().slice(0, 7)}-01`;
   loadMonth();
+  updateMainDiagnostics();
 });
 
 locationSelect?.addEventListener('change', () => {
   currentMonthISO = currentMonthISO || `${todayIso().slice(0, 7)}-01`;
   loadMonth();
+});
+
+$('appt')?.addEventListener('change', () => {
+  updateMainDiagnostics();
+});
+
+$('poolAppt')?.addEventListener('change', () => {
+  updatePoolDiagnostics();
+});
+
+$('location')?.addEventListener('blur', () => {
+  const value = $('location').value.trim().toLowerCase();
+  if (value) {
+    updateMainDiagnostics($('account')?.value || 'main', value);
+  }
+});
+
+$('calendar')?.addEventListener('change', (event) => {
+  if (mainFetchBtn) mainFetchBtn.disabled = !event.target.value && (!mainDiag || /Final IDs used: —/.test(mainDiag.textContent));
 });
 
 document.addEventListener('DOMContentLoaded', () => {

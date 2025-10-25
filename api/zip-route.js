@@ -1,10 +1,6 @@
 const { randomUUID } = require("crypto");
 
-const availability = require("./availability");
-const { applyCors, normalizeAccount, normalizeLocation, loadCityTypes } = require("./_acuity");
-const { getConfiguredIdentifiers } = require("../lib/location-config");
-
-const { CALENDAR_IDS, ensureCalendarId } = availability;
+const { applyCors, normalizeAccount, normalizeLocation, loadCityTypes, getConfiguredLocationEntries } = require("./_acuity");
 
 const ZIP_TO_CITY = {
   "85085": "anthem",
@@ -60,12 +56,13 @@ const buildLocationConfig = () => {
     const compactKey = normalizedKey.replace(/\s+/g, "");
     const appointmentTypeId =
       appointmentMap[normalizedKey] || appointmentMap[compactKey] || null;
-    const calendars = baseMeta.calendars || (labelCandidate ? [labelCandidate] : []);
+    const configured = getConfiguredLocationEntries(inferredAccount, normalizedKey);
     config[normalizedKey] = {
       label: labelCandidate,
       appointmentTypeId,
       account: normalizeAccount(inferredAccount),
-      calendars
+      configuredCalendarIds: configured.numeric || [],
+      configuredCalendarNames: configured.names || []
     };
   };
 
@@ -124,38 +121,8 @@ const handler = async (req, res) => {
   }
 
   const account = normalizeAccount(config.account);
-  const accountCalendars = CALENDAR_IDS[account] || {};
-  const calendarEntry = accountCalendars[cityKey] || null;
-
-  const configured = getConfiguredIdentifiers(account, cityKey);
-  let calendarId = configured.numeric.length ? configured.numeric[0] : null;
-  let calendarSource = calendarId != null ? "config" : null;
-
-  if (calendarId == null && calendarEntry?.calendarId != null) {
-    const parsed = Number(calendarEntry.calendarId);
-    if (Number.isFinite(parsed)) {
-      calendarId = parsed;
-      calendarSource = calendarEntry.calendarIdSource || "cache";
-    }
-  }
-
-  if (calendarId == null && typeof ensureCalendarId === "function") {
-    try {
-      calendarId = await ensureCalendarId(account, cityKey);
-      if (calendarEntry?.calendarIdSource && calendarId != null) {
-        calendarSource = calendarEntry.calendarIdSource;
-      } else if (calendarId != null && !calendarSource) {
-        calendarSource = "lookup";
-      }
-    } catch (error) {
-      return send(error?.status || 502, {
-        ok: false,
-        error: error?.message || "Calendar lookup failed",
-        account,
-        cityKey
-      });
-    }
-  }
+  const configured = getConfiguredLocationEntries(account, cityKey);
+  const primaryId = Array.isArray(configured.numeric) && configured.numeric.length ? configured.numeric[0] : null;
 
   res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
@@ -164,9 +131,10 @@ const handler = async (req, res) => {
     zip,
     cityKey,
     calendar: config.label,
-    calendarId: calendarId ?? null,
-    calendarSource: calendarSource || undefined,
-    configuredCalendarIds: configured.numeric,
+    calendarId: primaryId,
+    calendarSource: primaryId != null ? "config" : undefined,
+    configuredCalendarIds: configured.numeric || [],
+    configuredCalendarNames: configured.names || [],
     appointmentTypeId: config.appointmentTypeId,
     account
   });

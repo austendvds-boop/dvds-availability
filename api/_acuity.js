@@ -4,6 +4,8 @@ const path = require("path");
 const API_BASE = "https://acuityscheduling.com/api/v1/";
 const DEFAULT_TZ = process.env.TZ_DEFAULT || "America/Phoenix";
 
+const LOCATION_CONFIG_DEFAULT = { main: {}, parents: {} };
+
 const ACCOUNT_ENV = {
   main: {
     user: ["ACUITY_MAIN_USER_ID", "ACUITY_USER_ID"],
@@ -126,6 +128,34 @@ const safeParse = (text) => {
   }
 };
 
+const loadLocationConfig = () => {
+  const filePath = path.join(process.cwd(), "location-config.json");
+  try {
+    if (!fs.existsSync(filePath)) {
+      return LOCATION_CONFIG_DEFAULT;
+    }
+    const text = fs.readFileSync(filePath, "utf8");
+    const parsed = safeParse(text);
+    const result = { main: {}, parents: {} };
+    for (const [account, locations] of Object.entries(parsed || {})) {
+      const normalizedAccount = normalizeAccount(account);
+      const bucket = (result[normalizedAccount] = result[normalizedAccount] || {});
+      for (const [location, entries] of Object.entries(locations || {})) {
+        const key = normalizeLocation(location);
+        if (!key) continue;
+        const compact = key.replace(/\s+/g, "");
+        bucket[key] = Array.isArray(entries) ? [...entries] : [];
+        if (!bucket[compact]) {
+          bucket[compact] = bucket[key];
+        }
+      }
+    }
+    return result;
+  } catch (error) {
+    return LOCATION_CONFIG_DEFAULT;
+  }
+};
+
 const loadCityTypes = () => {
   const filePath = path.join(process.cwd(), "city-types.json");
   try {
@@ -153,6 +183,55 @@ const loadCityTypes = () => {
   } catch (error) {
     return CITY_TYPES_DEFAULT;
   }
+};
+
+const parseCalendarConfigEntry = (value) => {
+  if (value == null) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d+$/.test(trimmed)) {
+      const numeric = Number(trimmed);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+    return trimmed;
+  }
+  if (typeof value === "object") {
+    if (value.id != null) {
+      return parseCalendarConfigEntry(value.id);
+    }
+    if (value.name) {
+      return String(value.name);
+    }
+  }
+  return null;
+};
+
+const getConfiguredLocationEntries = (account, location) => {
+  const config = loadLocationConfig();
+  const normalizedAccount = normalizeAccount(account || "main");
+  const normalizedLocation = normalizeLocation(location || "");
+  if (!normalizedLocation) {
+    return { raw: [], numeric: [], names: [] };
+  }
+  const bucket = config[normalizedAccount] || {};
+  const entries = bucket[normalizedLocation] || [];
+  const raw = Array.isArray(entries) ? entries : [];
+  const numeric = [];
+  const names = [];
+  for (const entry of raw) {
+    const parsed = parseCalendarConfigEntry(entry);
+    if (parsed == null) continue;
+    if (typeof parsed === "number") {
+      if (!numeric.includes(parsed)) numeric.push(parsed);
+    } else {
+      if (!names.includes(parsed)) names.push(parsed);
+    }
+  }
+  return { raw, numeric, names };
 };
 
 const getTypeById = async (account, typeId) => {
@@ -248,5 +327,7 @@ module.exports = {
   TTL_MS,
   CORS_ORIGINS,
   loadCityTypes,
-  getTypeById
+  getTypeById,
+  loadLocationConfig,
+  getConfiguredLocationEntries
 };

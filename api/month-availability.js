@@ -2,31 +2,29 @@ const { randomUUID } = require("crypto");
 
 const {
   DEFAULT_TZ,
+  applyCors,
   normalizeAccount,
   normalizeLocation,
-  applyCors,
+  loadCityTypes,
+  getTypeById,
   acuityFetch,
   addDaysISO,
   startOfMonthISO,
-  daysInMonth,
-  loadCityTypes,
-  getTypeById
+  daysInMonth
 } = require("./_acuity");
 
-const { resolveLocationCalendars } = require("./location-availability");
+const { resolveConfiguredCalendars } = require("./location-availability");
 
-const inferAccountFromLocation = (cityTypes, providedAccount, locationKey, fallbackAccount = "main") => {
+const inferAccountFromLocation = (cityTypes, providedAccount, locationKey) => {
   if (providedAccount) return normalizeAccount(providedAccount);
   const normalizedLocation = normalizeLocation(locationKey || "");
-  if (!normalizedLocation) return normalizeAccount(fallbackAccount);
+  if (!normalizedLocation) return "main";
+  if (cityTypes.parents?.[normalizedLocation]) return "parents";
   const compact = normalizedLocation.replace(/\s+/g, "");
-  if (cityTypes.parents?.[normalizedLocation] || cityTypes.parents?.[compact]) {
-    return "parents";
-  }
-  if (cityTypes.main?.[normalizedLocation] || cityTypes.main?.[compact]) {
-    return "main";
-  }
-  return normalizeAccount(fallbackAccount);
+  if (cityTypes.parents?.[compact]) return "parents";
+  if (cityTypes.main?.[normalizedLocation]) return "main";
+  if (cityTypes.main?.[compact]) return "main";
+  return "main";
 };
 
 const resolveAppointmentTypeId = (cityTypes, account, locationKey, explicitType) => {
@@ -38,26 +36,24 @@ const resolveAppointmentTypeId = (cityTypes, account, locationKey, explicitType)
     return { id: null, source: null };
   }
   const map = cityTypes[account] || {};
+  const direct = map[normalizedLocation];
+  if (direct) {
+    return { id: String(direct), source: "city-types" };
+  }
   const compact = normalizedLocation.replace(/\s+/g, "");
-  const resolved = map[normalizedLocation] || map[compact] || null;
-  return { id: resolved ? String(resolved) : null, source: resolved ? "city-types" : null };
+  if (map[compact]) {
+    return { id: String(map[compact]), source: "city-types" };
+  }
+  return { id: null, source: null };
 };
 
-const isoToday = (tz = DEFAULT_TZ) =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  })
-    .format(new Date())
-    .replace(/\//g, "-");
-
-const handler = async (req, res) => {
+module.exports = async (req, res) => {
   applyCors(req, res);
 
   const requestId = String(req.headers["x-request-id"] || randomUUID());
   res.setHeader("X-Request-Id", requestId);
+
+  const send = (status, payload) => res.status(status).json({ requestId, ...payload });
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
@@ -65,20 +61,17 @@ const handler = async (req, res) => {
 
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET, OPTIONS");
-    return res.status(405).json({ requestId, ok: false, error: "Method not allowed" });
+    return send(405, { ok: false, error: "Method not allowed" });
   }
-
-  res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=600");
 
   const query = req.query || {};
-  const cityTypes = loadCityTypes();
   const normalizedLocation = normalizeLocation(query.location || "");
-
   if (!normalizedLocation) {
-    return res.status(400).json({ requestId, ok: false, error: "Missing location" });
+    return send(400, { ok: false, error: "Missing location" });
   }
 
-  const account = inferAccountFromLocation(cityTypes, query.account, normalizedLocation, "main");
+  const cityTypes = loadCityTypes();
+  const account = inferAccountFromLocation(cityTypes, query.account, normalizedLocation);
   const { id: appointmentTypeId, source: appointmentTypeSource } = resolveAppointmentTypeId(
     cityTypes,
     account,
@@ -87,107 +80,92 @@ const handler = async (req, res) => {
   );
 
   if (!appointmentTypeId) {
-    return res.status(400).json({
-      requestId,
-      ok: false,
-      error: "Missing appointmentTypeId (provide it directly or configure the location)",
-      account,
-      location: normalizedLocation
-    });
+    return send(400, { ok: false, error: "Missing appointmentTypeId", account, location: normalizedLocation });
   }
 
   const tz = DEFAULT_TZ;
-  const baseDate = typeof query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(query.date)
-    ? query.date
-    : isoToday(tz);
+  const baseDate = String(query.date || "").trim() || new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()).replace(/\//g, "-");
   const monthStart = startOfMonthISO(baseDate, tz);
   const totalDays = daysInMonth(baseDate, tz);
 
-  let typeInfo = null;
-  try {
-    typeInfo = await getTypeById(account, appointmentTypeId);
-  } catch (error) {
-    // continue without type metadata; downstream logic will fall back to configured/all calendars
-  }
+  const typeInfo = await getTypeById(account, appointmentTypeId);
+  const calendarResolution = await resolveConfiguredCalendars(account, normalizedLocation, typeInfo);
 
-  let calendarResolution;
-  try {
-    calendarResolution = await resolveLocationCalendars(account, normalizedLocation, {
-      appointmentTypeId,
-      typeInfo
-    });
-  } catch (error) {
-    return res.status(error.status || 500).json({
-      requestId,
+  if (!calendarResolution.configured.length) {
+    return send(404, {
       ok: false,
-      error: error.message || "Failed to resolve calendars",
+      error: "No calendars configured for this location (strict mode)",
       account,
       location: normalizedLocation
     });
   }
 
-  const calendarIds = Array.isArray(calendarResolution?.ids) ? calendarResolution.ids : [];
-  if (!calendarIds.length) {
-    return res.status(404).json({
-      requestId,
+  if (!calendarResolution.ids.length) {
+    if (calendarResolution.typeCalendarIds.length) {
+      return send(400, {
+        ok: false,
+        error: "Configured calendars are not enabled for this appointment type in Acuity",
+        account,
+        location: normalizedLocation,
+        configured: calendarResolution.configured,
+        typeCalendarIds: calendarResolution.typeCalendarIds
+      });
+    }
+    return send(404, {
       ok: false,
-      error: `No calendars available for "${normalizedLocation}"`,
+      error: "Configured calendar IDs could not be resolved",
       account,
       location: normalizedLocation,
-      calendarSource: calendarResolution?.calendarSource || null
+      unresolved: calendarResolution.unresolvedNames
     });
   }
 
   const byDate = {};
-  const errors = [];
-  for (let offset = 0; offset < totalDays; offset += 1) {
-    const day = offset === 0 ? monthStart : addDaysISO(monthStart, offset, tz);
-    if (!day) continue;
+  for (let i = 0; i < totalDays; i += 1) {
+    const day = addDaysISO(monthStart, i, tz);
     byDate[day] = 0;
-    await Promise.all(
-      calendarIds.map(async (calendarID) => {
-        try {
-          const response = await acuityFetch(account, "availability/times", {
-            appointmentTypeID: appointmentTypeId,
-            calendarID,
-            date: day
-          });
-          if (Array.isArray(response)) {
-            const sum = response.reduce((total, entry) => total + Number(entry?.slots || 1), 0);
-            byDate[day] += Number.isFinite(sum) ? sum : 0;
-          }
-        } catch (error) {
-          errors.push({
-            calendarID,
-            date: day,
-            status: error?.status || null,
-            message: error?.message || "Acuity request failed"
-          });
-        }
-      })
-    );
   }
 
-  return res.status(200).json({
-    requestId,
+  const baseUrl = "availability/times";
+  await Promise.all(
+    calendarResolution.ids.map(async (calendarId) => {
+      for (let i = 0; i < totalDays; i += 1) {
+        const date = addDaysISO(monthStart, i, tz);
+        try {
+          const times = await acuityFetch(account, baseUrl, {
+            calendarID: calendarId,
+            appointmentTypeID: appointmentTypeId,
+            date
+          });
+          if (Array.isArray(times) && times.length) {
+            const total = times.reduce((sum, entry) => sum + (Number(entry.slots) || 0), 0);
+            byDate[date] += total;
+          }
+        } catch (error) {
+          // ignore individual calendar failures; strict config prevents most invalid requests
+        }
+      }
+    })
+  );
+
+  res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=600");
+
+  return send(200, {
     ok: true,
     account,
     location: normalizedLocation,
-    appointmentTypeId: String(appointmentTypeId),
-    appointmentTypeSource,
+    appointmentTypeId,
+    appointmentTypeSource: appointmentTypeSource || undefined,
+    appointmentTypeName: typeInfo?.name,
     monthStart,
     days: totalDays,
-    calendarIDs: calendarIds,
-    calendarSource: calendarResolution?.calendarSource || null,
-    configuredIds: calendarResolution?.configuredIds || [],
-    configured: calendarResolution?.configured || [],
-    unresolvedCalendars: calendarResolution?.unresolvedNames || [],
-    typeCalendarIds: calendarResolution?.typeCalendarIds || [],
-    typeCalendars: calendarResolution?.typeCalendars || [],
-    byDate,
-    errors
+    calendarIDs: calendarResolution.ids,
+    configuredCalendars: calendarResolution.configured,
+    configuredIds: calendarResolution.configuredIds,
+    typeCalendarIds: calendarResolution.typeCalendarIds.length ? calendarResolution.typeCalendarIds : undefined,
+    unresolvedCalendars: calendarResolution.unresolvedNames.length ? calendarResolution.unresolvedNames : undefined,
+    byDate
   });
 };
 
-module.exports = handler;
 module.exports.config = { runtime: "nodejs20.x" };

@@ -45,15 +45,16 @@ Update [`location-config.json`](./location-config.json) so each location lists t
 }
 ```
 
-The APIs automatically prioritise the numeric IDs from this file. If an array is empty the handlers fall back to fuzzy name matching using the labels defined in `api/zip-route.js`.
+Each array must list the exact numeric instructor calendar IDs that belong to that city for the specified account. If an array is empty, the strict resolvers will return `404` until you populate it, preventing accidental lookups against unrelated calendars.
 
 ### Step 4 – Verify with diagnostics
 
-After saving `location-config.json`, redeploy and call `/api/resolve-location?account=main&location=scottsdale`. The response should include:
+After saving `location-config.json`, redeploy and call `/api/resolve-location?account=main&location=scottsdale`. The response highlights:
 
 - `configuredIds` – the numeric IDs sourced directly from `location-config.json`
-- `resolvedIds` – the IDs actually used to query Acuity (after any lookups)
-- `configuredSource` – `config` when the JSON file provided the IDs, `fallback` when name matching was required
+- `typeCalendarIds` – calendars Acuity says are enabled for the appointment type (if Acuity exposes that metadata)
+- `resolvedIds` – the final intersection used for availability requests
+- `disallowed` – configured IDs that are currently not enabled for the appointment type (update the type in Acuity if you see values here)
 
 The production UI on `/` surfaces the same diagnostics under the “Pool availability by location” panel, alongside the appointment type resolver, so you can confirm the configuration without leaving the dashboard. The new month view card at the bottom of the page calls `/api/month-availability`, paints a calendar grid of pooled slot counts, and lets you click a day to drill into the exact times using `/api/location-availability`.
 
