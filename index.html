@@ -6,23 +6,35 @@
   <title>DVDS Availability</title>
   <style>
     :root{--bg:#0b1320;--panel:#111827;--ink:#e5e7eb;--muted:#94a3b8;--brand:#34b16a;--edge:#263042}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,Segoe UI,Roboto}
-    .wrap{max-width:1100px;margin:48px auto;padding:0 20px}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,Segoe UI,Roboto}
+    .wrap{max-width:1100px;margin:48px auto;padding:0 20px;display:flex;flex-direction:column;gap:32px}
     .card{background:var(--panel);border-radius:18px;box-shadow:0 10px 24px rgba(0,0,0,.35);padding:24px}
-    h1{margin:0 0 16px;font-size:26px} p{margin:0 0 12px;color:var(--muted)}
+    h1{margin:0 0 16px;font-size:26px}
+    h2{margin:0 0 16px;font-size:22px}
+    p{margin:0 0 12px;color:var(--muted)}
     label{display:block;margin:10px 0 6px;color:var(--muted)}
     input,select,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--edge);background:#0f172a;color:var(--ink)}
-    button{background:var(--brand);border:none;color:#052814;font-weight:700;cursor:pointer}
+    button{background:var(--brand);border:none;color:#052814;font-weight:700;cursor:pointer;transition:background .2s ease}
+    button:hover{background:#2d995a}
     .grid{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}
     .grid2{display:grid;gap:12px;grid-template-columns:repeat(2,1fr)}
     @media (max-width:880px){.grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
     .row{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+    .row button{flex:1 1 220px}
     .slots{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));margin-top:16px}
     .slot{background:#0a1222;border:1px solid var(--edge);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px}
     .slot b{font-size:15px}
     .small{font-size:13px;color:var(--muted)}
-    pre{background:#0a1222;border-radius:12px;padding:14px;white-space:pre-wrap;word-break:break-word}
-    .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#0a1222;border:1px solid var(--edge);font-size:12px;color:var(--muted)}
+    pre{background:#0a1222;border-radius:12px;padding:14px;white-space:pre-wrap;word-break:break-word;margin-top:16px}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#0a1222;border:1px solid var(--edge);font-size:12px;color:var(--muted);cursor:pointer}
+    .notice{background:#0a1222;border:1px solid var(--edge);border-radius:12px;padding:12px}
+    .pool-times{display:grid;gap:8px;margin-top:12px}
+    .pool-entry{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#091120;border:1px solid var(--edge);border-radius:12px;padding:10px 12px}
+    .pool-entry button{width:auto;min-width:120px;padding:10px 18px}
+    .pool-info b{display:block;font-size:15px}
+    .pool-info .small{margin-top:4px}
+    .pool-info .sources{font-size:12px;color:var(--muted);margin-top:2px}
   </style>
 </head>
 <body>
@@ -61,77 +73,295 @@
     <div class="row">
       <button id="load">Load calendars</button>
       <button id="check">Fetch availability</button>
-      <span id="meta" class="badge">waiting…</span>
+      <span id="meta" class="badge" title="Click to toggle debug">waiting…</span>
     </div>
     <div id="slots" class="slots"></div>
     <pre id="debug" style="display:none"></pre>
   </div>
+
+  <div class="card">
+    <h2>Pool availability by location</h2>
+    <p>Merge slots across instructors for a single city. Configure each location’s calendars in <code>LOCATION_CONFIG</code>.</p>
+    <div class="grid">
+      <div>
+        <label>Account</label>
+        <select id="poolAccount">
+          <option value="main">Main</option>
+          <option value="parents">Parents</option>
+        </select>
+      </div>
+      <div>
+        <label>Location</label>
+        <select id="poolLocation"></select>
+      </div>
+      <div>
+        <label>Appointment Type ID</label>
+        <input id="poolAppt" placeholder="e.g. 50529778" value="50529778" />
+      </div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label>Date</label>
+        <input id="poolDate" type="date" />
+      </div>
+      <div>
+        <label>Days (1–7)</label>
+        <input id="poolDays" type="number" min="1" max="7" value="1" />
+      </div>
+    </div>
+    <div class="row">
+      <button id="poolFetch">Fetch pooled availability</button>
+      <span id="poolMeta" class="badge" title="Click to toggle debug">waiting…</span>
+    </div>
+    <div id="poolSlots" class="slots"></div>
+    <pre id="poolDebug" style="display:none"></pre>
+  </div>
 </div>
 <script>
-const $ = id => document.getElementById(id);
-const meta=$('meta'), slots=$('slots'), dbg=$('debug');
+const $ = (id) => document.getElementById(id);
 
-// default today's date in America/Phoenix
-(function setToday(){const tz='America/Phoenix'; const d=new Date().toLocaleDateString('en-CA',{timeZone:tz}); $('date').value=d;})();
+const meta = $('meta');
+const slots = $('slots');
+const dbg = $('debug');
+const poolMeta = $('poolMeta');
+const poolSlots = $('poolSlots');
+const poolDbg = $('poolDebug');
 
-function fmtLocal(iso){try{const dt = new Date(iso); return dt.toLocaleString([], {hour:'numeric', minute:'2-digit'})}catch{ return iso }}
-function clearSlots(){ slots.innerHTML=''; }
-function showError(msg){ clearSlots(); const d=document.createElement('div'); d.className='small'; d.textContent=msg; slots.appendChild(d); }
+const attachBadgeToggle = (badge, output) => {
+  if (!badge || !output) return;
+  badge.addEventListener('click', () => {
+    if (!output.textContent) return;
+    output.style.display = output.style.display === 'block' ? 'none' : 'block';
+  });
+};
+attachBadgeToggle(meta, dbg);
+attachBadgeToggle(poolMeta, poolDbg);
 
-meta.onclick = () => {
-  if (!dbg.textContent) return;
-  const next = dbg.style.display === 'block' ? 'none' : 'block';
-  dbg.style.display = next;
+const setToday = (inputId) => {
+  const el = $(inputId);
+  if (!el) return;
+  const tz = 'America/Phoenix';
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  el.value = today;
+};
+setToday('date');
+setToday('poolDate');
+
+const LOCATIONS = [
+  { key: 'anthem', label: 'Anthem', account: 'main' },
+  { key: 'ahwatukee', label: 'Ahwatukee', account: 'main' },
+  { key: 'apachejunction', label: 'Apache Junction', account: 'main' },
+  { key: 'chandler', label: 'Chandler', account: 'main' },
+  { key: 'gilbert', label: 'Gilbert', account: 'main' },
+  { key: 'mesa', label: 'Mesa', account: 'main' },
+  { key: 'scottsdale', label: 'Scottsdale', account: 'main' },
+  { key: 'tempe', label: 'Tempe', account: 'main' },
+  { key: 'parents', label: 'Parents', account: 'parents' }
+];
+
+const poolLocation = $('poolLocation');
+const poolAccount = $('poolAccount');
+
+if (poolLocation) {
+  poolLocation.innerHTML = '';
+  LOCATIONS.forEach((loc) => {
+    const option = document.createElement('option');
+    option.value = loc.key;
+    option.textContent = loc.label;
+    poolLocation.appendChild(option);
+  });
+  if (LOCATIONS.length) {
+    poolLocation.value = LOCATIONS[0].key;
+    poolAccount.value = LOCATIONS[0].account;
+  }
+  poolLocation.addEventListener('change', (event) => {
+    const selected = LOCATIONS.find((loc) => loc.key === event.target.value);
+    if (selected && selected.account) {
+      poolAccount.value = selected.account;
+    }
+  });
+}
+
+const fmtLocal = (iso) => {
+  try {
+    const dt = new Date(iso);
+    return dt.toLocaleString([], { hour: 'numeric', minute: '2-digit' });
+  } catch (error) {
+    return iso;
+  }
+};
+
+const clearAvailabilitySlots = () => { slots.innerHTML = ''; };
+const showAvailabilityError = (msg) => {
+  clearAvailabilitySlots();
+  const div = document.createElement('div');
+  div.className = 'small notice';
+  div.textContent = msg;
+  slots.appendChild(div);
+};
+
+const clearPoolSlots = () => { poolSlots.innerHTML = ''; };
+const showPoolError = (msg) => {
+  clearPoolSlots();
+  const div = document.createElement('div');
+  div.className = 'small notice';
+  div.textContent = msg;
+  poolSlots.appendChild(div);
 };
 
 $('load').onclick = async () => {
   meta.textContent = 'Loading calendars…';
-  clearSlots();
+  clearAvailabilitySlots();
   dbg.textContent = '';
   dbg.style.display = 'none';
   const account = $('account').value;
   try {
-    const r = await fetch(`/api/calendars?account=${encodeURIComponent(account)}`);
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || 'Failed to load calendars');
-    const sel = $('calendar'); sel.innerHTML='';
-    (j.calendars || []).forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.id; opt.textContent = `${c.name} (#${c.id})`;
-      sel.appendChild(opt);
+    const response = await fetch(`/api/calendars?account=${encodeURIComponent(account)}`);
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error || 'Failed to load calendars');
+    const select = $('calendar');
+    select.innerHTML = '';
+    (data.calendars || []).forEach((calendar) => {
+      const option = document.createElement('option');
+      option.value = calendar.id;
+      option.textContent = `${calendar.name} (#${calendar.id})`;
+      select.appendChild(option);
     });
-    meta.textContent = `Loaded ${j.calendars?.length || 0} calendars for ${j.account}`;
-  } catch(e){ meta.textContent='Error'; showError(e.message || String(e)); }
+    meta.textContent = `Loaded ${data.calendars?.length || 0} calendars for ${data.account}`;
+  } catch (error) {
+    meta.textContent = 'Error';
+    showAvailabilityError(error.message || String(error));
+  }
 };
 
 $('check').onclick = async () => {
   meta.textContent = 'Fetching times…';
-  clearSlots();
-  const account=$('account').value;
-  const appt=$('appt').value.trim();
-  const date=$('date').value;
-  const loc=$('location').value.trim();
-  const cal=$('calendar').value;
-  const p = new URLSearchParams({ account, appointmentTypeId: appt, date });
-  if (cal) p.set('calendarID', cal); else if (loc) p.set('location', loc);
-  try{
-    const r = await fetch(`/api/availability?`+p.toString());
-    const j = await r.json();
-    dbg.textContent = JSON.stringify(j, null, 2);
+  clearAvailabilitySlots();
+  const account = $('account').value;
+  const appt = $('appt').value.trim();
+  const date = $('date').value;
+  const loc = $('location').value.trim();
+  const cal = $('calendar').value;
+  const params = new URLSearchParams({ account, appointmentTypeId: appt, date });
+  if (cal) params.set('calendarID', cal); else if (loc) params.set('location', loc);
+  try {
+    const response = await fetch(`/api/availability?${params.toString()}`);
+    const data = await response.json();
+    dbg.textContent = JSON.stringify(data, null, 2);
     dbg.style.display = '';
-    if (!j.ok) { meta.textContent='Error'; return showError(j.error || 'No data'); }
-    meta.textContent = `Found ${j.count ?? (Array.isArray(j.times)?j.times.length:0)} slots`;
-    if (Array.isArray(j.times) && j.times.length){
-      j.times.forEach(t => {
-        // Acuity returns { time: "2025-10-24T15:30:00-07:00", slots: 1, ... }
-        const el = document.createElement('div'); el.className='slot';
-        const btn = document.createElement('button'); btn.textContent='Copy time';
-        btn.onclick = () => navigator.clipboard.writeText(t.time || JSON.stringify(t));
-        el.innerHTML = `<b>${fmtLocal(t.time || t.datetime || 'time')}</b><div class="small">slots: ${t.slots ?? '?'}</div>`;
-        el.appendChild(btn); slots.appendChild(el);
+    if (!data.ok) {
+      meta.textContent = 'Error';
+      return showAvailabilityError(data.error || 'No data returned');
+    }
+    const count = data.count ?? (Array.isArray(data.times) ? data.times.length : 0);
+    meta.textContent = `Found ${count} slots`;
+    if (Array.isArray(data.times) && data.times.length) {
+      data.times.forEach((time) => {
+        const el = document.createElement('div');
+        el.className = 'slot';
+        const btn = document.createElement('button');
+        btn.textContent = 'Copy time';
+        btn.onclick = () => navigator.clipboard.writeText(time.time || JSON.stringify(time));
+        el.innerHTML = `<b>${fmtLocal(time.time || time.datetime || 'time')}</b><div class="small">slots: ${time.slots ?? '?'}</div>`;
+        el.appendChild(btn);
+        slots.appendChild(el);
       });
-    } else { showError('No slots for that date/selection'); }
-  }catch(e){ meta.textContent='Error'; showError(e.message || String(e)); }
+    } else {
+      showAvailabilityError('No slots for that date/selection');
+    }
+  } catch (error) {
+    meta.textContent = 'Error';
+    showAvailabilityError(error.message || String(error));
+  }
+};
+
+$('poolFetch').onclick = async () => {
+  poolMeta.textContent = 'Fetching pooled availability…';
+  clearPoolSlots();
+  poolDbg.textContent = '';
+  poolDbg.style.display = 'none';
+  const account = poolAccount.value;
+  const location = poolLocation.value;
+  const appt = $('poolAppt').value.trim();
+  const date = $('poolDate').value;
+  const days = $('poolDays').value || '1';
+  const params = new URLSearchParams({ account, location, appointmentTypeId: appt, date, days });
+  try {
+    const response = await fetch(`/api/location-availability?${params.toString()}`);
+    const data = await response.json();
+    poolDbg.textContent = JSON.stringify(data, null, 2);
+    poolDbg.style.display = '';
+    if (!data.ok) {
+      poolMeta.textContent = 'Error';
+      return showPoolError(data.error || 'No data returned');
+    }
+
+    const mergedSlotCount = Array.isArray(data.results)
+      ? data.results.reduce((sum, day) => sum + (Array.isArray(day.times) ? day.times.length : 0), 0)
+      : 0;
+    const totalCapacity = Array.isArray(data.results)
+      ? data.results.reduce((sum, day) => sum + (Number(day.totalSlots) || 0), 0)
+      : 0;
+    const calendarCount = Array.isArray(data.pooledCalendarIds) ? data.pooledCalendarIds.length : 0;
+    let metaText = `Merged ${mergedSlotCount} time slot${mergedSlotCount === 1 ? '' : 's'} (${totalCapacity} total seats) across ${calendarCount} calendar${calendarCount === 1 ? '' : 's'}`;
+    if (Array.isArray(data.unresolvedCalendars) && data.unresolvedCalendars.length) {
+      metaText += ` · unresolved: ${data.unresolvedCalendars.join(', ')}`;
+    }
+    poolMeta.textContent = metaText;
+
+    if (Array.isArray(data.unresolvedCalendars) && data.unresolvedCalendars.length) {
+      const warn = document.createElement('div');
+      warn.className = 'notice small';
+      warn.textContent = `Unresolved calendars: ${data.unresolvedCalendars.join(', ')}`;
+      poolSlots.appendChild(warn);
+    }
+    if (Array.isArray(data.errors) && data.errors.length) {
+      const warn = document.createElement('div');
+      warn.className = 'notice small';
+      warn.textContent = `Acuity errors: ${data.errors.length} calendars returned issues. See debug for details.`;
+      poolSlots.appendChild(warn);
+    }
+
+    if (Array.isArray(data.results) && data.results.length) {
+      data.results.forEach((day) => {
+        const card = document.createElement('div');
+        card.className = 'slot';
+        card.innerHTML = `<b>${day.date}</b><div class="small">total slots: ${day.totalSlots ?? 0}</div>`;
+        const container = document.createElement('div');
+        container.className = 'pool-times';
+        if (Array.isArray(day.times) && day.times.length) {
+          day.times.forEach((time) => {
+            const row = document.createElement('div');
+            row.className = 'pool-entry';
+            const info = document.createElement('div');
+            info.className = 'pool-info';
+            const sources = Array.isArray(time.sources) && time.sources.length ? time.sources.join(', ') : '—';
+            info.innerHTML = `<b>${fmtLocal(time.time || time.datetime || 'time')}</b>` +
+              `<div class="small">slots: ${time.slots ?? '?'}</div>` +
+              `<div class="sources">Calendars: ${sources}</div>`;
+            const btn = document.createElement('button');
+            btn.textContent = 'Copy time';
+            btn.onclick = () => navigator.clipboard.writeText(time.time || JSON.stringify(time));
+            row.appendChild(info);
+            row.appendChild(btn);
+            container.appendChild(row);
+          });
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'small';
+          empty.textContent = 'No slots for this day.';
+          container.appendChild(empty);
+        }
+        card.appendChild(container);
+        poolSlots.appendChild(card);
+      });
+    } else {
+      showPoolError('No slots returned for the requested range');
+    }
+  } catch (error) {
+    poolMeta.textContent = 'Error';
+    showPoolError(error.message || String(error));
+  }
 };
 </script>
 </body></html>

@@ -20,6 +20,7 @@ const CORS_ORIGINS = new Set([
 const calendarCache = new Map();
 const appointmentTypeCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const TTL_MS = CACHE_TTL_MS;
 
 const pickEnv = (names = []) => {
   for (const name of names) {
@@ -123,6 +124,44 @@ const applyCors = (req, res) => {
 
 const normalizeLocation = (value = "") => value.toString().trim().toLowerCase();
 
+const groupTimesMerge = (arrays) => {
+  const merged = new Map();
+  if (!Array.isArray(arrays)) return [];
+
+  for (const list of arrays) {
+    if (!Array.isArray(list)) continue;
+    for (const entry of list) {
+      const key = entry?.time || entry?.datetime;
+      if (!key) continue;
+      const prev = merged.get(key) || { time: key, slots: 0, sources: [] };
+      const slots = Number(entry?.slots ?? 1);
+      prev.slots += Number.isFinite(slots) ? slots : 0;
+      const sourceId = entry?.calendarID || entry?.calendarId || entry?.calendar || "unknown";
+      prev.sources.push(sourceId);
+      merged.set(key, prev);
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => a.time.localeCompare(b.time));
+};
+
+const addDaysISO = (isoDate, amount, tz = DEFAULT_TZ) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || ""))) {
+    return null;
+  }
+
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const utcBase = new Date(Date.UTC(year, month - 1, day));
+  if (!Number.isFinite(amount)) amount = 0;
+  utcBase.setUTCDate(utcBase.getUTCDate() + Number(amount));
+
+  const zoned = new Date(utcBase.toLocaleString("en-US", { timeZone: tz }));
+  const yyyy = zoned.getFullYear();
+  const mm = String(zoned.getMonth() + 1).padStart(2, "0");
+  const dd = String(zoned.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 module.exports = {
   DEFAULT_TZ,
   normalizeAccount,
@@ -132,5 +171,9 @@ module.exports = {
   listCalendars,
   listAppointmentTypes,
   applyCors,
-  normalizeLocation
+  normalizeLocation,
+  groupTimesMerge,
+  addDaysISO,
+  TTL_MS,
+  CORS_ORIGINS
 };

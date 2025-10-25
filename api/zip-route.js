@@ -13,16 +13,62 @@ const ZIP_TO_CITY = {
   "85281": "tempe"
 };
 
+// Add additional instructor calendar names or numeric IDs to the calendars array per location.
 const LOCATION_CONFIG = {
-  anthem: { label: "Anthem", appointmentTypeId: "50529778", account: "main" },
-  ahwatukee: { label: "Ahwatukee", appointmentTypeId: "50529778", account: "main" },
-  apachejunction: { label: "Apache Junction", appointmentTypeId: "50529778", account: "main" },
-  chandler: { label: "Chandler", appointmentTypeId: "50529778", account: "main" },
-  gilbert: { label: "Gilbert", appointmentTypeId: "50529778", account: "main" },
-  mesa: { label: "Mesa", appointmentTypeId: "50529778", account: "main" },
-  scottsdale: { label: "Scottsdale", appointmentTypeId: "50529778", account: "main" },
-  tempe: { label: "Tempe", appointmentTypeId: "50529778", account: "main" },
-  parents: { label: "Parents", appointmentTypeId: "50529778", account: "parents" }
+  anthem: {
+    label: "Anthem",
+    appointmentTypeId: "50529778",
+    account: "main",
+    calendars: ["Anthem"]
+  },
+  ahwatukee: {
+    label: "Ahwatukee",
+    appointmentTypeId: "50529778",
+    account: "main",
+    calendars: ["Ahwatukee"]
+  },
+  apachejunction: {
+    label: "Apache Junction",
+    appointmentTypeId: "50529778",
+    account: "main",
+    calendars: ["Apache Junction"]
+  },
+  chandler: {
+    label: "Chandler",
+    appointmentTypeId: "50529778",
+    account: "main",
+    calendars: ["Chandler"]
+  },
+  gilbert: {
+    label: "Gilbert",
+    appointmentTypeId: "50529778",
+    account: "main",
+    calendars: ["Gilbert"]
+  },
+  mesa: {
+    label: "Mesa",
+    appointmentTypeId: "50529778",
+    account: "main",
+    calendars: ["Mesa"]
+  },
+  scottsdale: {
+    label: "Scottsdale",
+    appointmentTypeId: "50529778",
+    account: "main",
+    calendars: ["Scottsdale"]
+  },
+  tempe: {
+    label: "Tempe",
+    appointmentTypeId: "50529778",
+    account: "main",
+    calendars: ["Tempe"]
+  },
+  parents: {
+    label: "Parents",
+    appointmentTypeId: "50529778",
+    account: "parents",
+    calendars: ["Parents"]
+  }
 };
 
 const FALLBACK_CITY = "scottsdale";
