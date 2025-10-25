@@ -127,6 +127,18 @@
     <div id="poolSlots" class="slots"></div>
     <pre id="poolDebug" style="display:none"></pre>
   </div>
+
+  <div class="card" id="cal-card">
+    <h2 style="margin:0 0 10px">Monthly availability</h2>
+    <p class="small">Pick an account and location above, then browse pooled slot counts for the month. Click any day to load live times below.</p>
+    <div class="row" style="align-items:center">
+      <button id="prevMonth" style="flex:0 0 auto;width:auto;min-width:120px">◀ Prev</button>
+      <div id="calLabel" class="badge" style="cursor:default">Month</div>
+      <button id="nextMonth" style="flex:0 0 auto;width:auto;min-width:120px">Next ▶</button>
+    </div>
+    <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:12px"></div>
+    <div class="small" id="calNote" style="margin-top:12px"></div>
+  </div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -590,5 +602,183 @@ $('poolFetch').onclick = async () => {
     showPoolError(error.message || String(error));
   }
 };
+</script>
+<script>
+const calGrid = document.getElementById('calGrid');
+const calLabel = document.getElementById('calLabel');
+const calNote = document.getElementById('calNote');
+const prevMonthBtn = document.getElementById('prevMonth');
+const nextMonthBtn = document.getElementById('nextMonth');
+
+const monthTz = 'America/Phoenix';
+const todayIso = () => new Date().toLocaleDateString('en-CA', { timeZone: monthTz });
+
+let currentMonthISO = (() => {
+  const today = todayIso();
+  return today ? `${today.slice(0, 7)}-01` : new Date().toISOString().slice(0, 7) + '-01';
+})();
+
+const monthLabel = (ymd) => {
+  const dt = new Date(`${ymd}T00:00:00`);
+  return dt.toLocaleDateString([], { month: 'long', year: 'numeric' });
+};
+
+const shiftMonth = (ymd, delta) => {
+  const [year, month] = ymd.split('-').map(Number);
+  const base = new Date(Date.UTC(year, month - 1 + delta, 1));
+  const y = base.getUTCFullYear();
+  const m = String(base.getUTCMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01`;
+};
+
+const ensureLocationKey = () => {
+  if (locationSelect && locationSelect.value) return locationSelect.value;
+  const freeform = $('location');
+  return freeform && freeform.value ? freeform.value.trim().toLowerCase() : '';
+};
+
+const ensureMonthType = async () => {
+  await ensureMainType?.();
+  return $('appt').value.trim();
+};
+
+const renderMonthGrid = (monthData) => {
+  if (!calGrid) return;
+  calGrid.innerHTML = '';
+  const headers = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  headers.forEach((label) => {
+    const cell = document.createElement('div');
+    cell.className = 'small';
+    cell.style.textAlign = 'center';
+    cell.style.opacity = '0.7';
+    cell.textContent = label;
+    calGrid.appendChild(cell);
+  });
+
+  const base = new Date(`${currentMonthISO}T00:00:00`);
+  const firstWeekday = base.getDay();
+  for (let i = 0; i < firstWeekday; i += 1) {
+    const pad = document.createElement('div');
+    pad.style.opacity = '0.2';
+    pad.style.border = '1px solid var(--edge)';
+    pad.style.borderRadius = '10px';
+    calGrid.appendChild(pad);
+  }
+
+  const totalDays = monthData?.days || 0;
+  const counts = monthData?.byDate || {};
+  const account = $('account')?.value || 'main';
+  const loc = ensureLocationKey();
+
+  for (let day = 1; day <= totalDays; day += 1) {
+    const date = `${currentMonthISO.slice(0, 8)}${String(day).padStart(2, '0')}`;
+    const count = Number(counts[date] || 0);
+
+    const cell = document.createElement('button');
+    cell.style.border = '1px solid var(--edge)';
+    cell.style.borderRadius = '12px';
+    cell.style.padding = '10px';
+    cell.style.background = '#0f172a';
+    cell.style.color = 'inherit';
+    cell.style.display = 'flex';
+    cell.style.flexDirection = 'column';
+    cell.style.alignItems = 'center';
+    cell.style.gap = '4px';
+    cell.innerHTML = `<div style="font-weight:700">${day}</div><div class="small">${count} slot${count === 1 ? '' : 's'}</div>`;
+    cell.onclick = async () => {
+      calNote.textContent = 'Loading pooled times…';
+      await ensureMonthType();
+      const appt = $('appt').value.trim();
+      if (!appt) {
+        calNote.textContent = 'No appointment type configured for this location.';
+        return;
+      }
+      const params = new URLSearchParams({
+        account,
+        location: loc,
+        appointmentTypeId: appt,
+        date,
+        days: '1'
+      });
+      try {
+        const response = await fetch(`/api/location-availability?${params.toString()}`);
+        const data = await response.json();
+        if (!data.ok) {
+          calNote.textContent = data.error || 'Failed to load daily availability.';
+          return;
+        }
+        const times = Array.isArray(data.results?.[0]?.times) ? data.results[0].times : [];
+        calNote.textContent = times.length
+          ? `Times for ${date}: ${times
+              .map((entry) => fmtLocal(entry.time || entry.datetime || 'time'))
+              .join(' · ')}`
+          : `No slots for ${date}.`;
+      } catch (error) {
+        calNote.textContent = error?.message || 'Failed to load daily availability.';
+      }
+    };
+
+    calGrid.appendChild(cell);
+  }
+};
+
+const loadMonth = async () => {
+  if (!calGrid || !calLabel) return;
+  const accountSelect = $('account');
+  const account = accountSelect ? accountSelect.value : 'main';
+  const locationKey = ensureLocationKey();
+  if (!locationKey) {
+    calGrid.innerHTML = '<div class="small" style="grid-column:1/-1">Choose a location to view the month.</div>';
+    calLabel.textContent = 'Month';
+    calNote.textContent = '';
+    return;
+  }
+
+  calLabel.textContent = monthLabel(currentMonthISO);
+  calGrid.innerHTML = '<div class="small" style="grid-column:1/-1">Loading…</div>';
+  calNote.textContent = '';
+
+  const params = new URLSearchParams({ account, location: locationKey, date: currentMonthISO });
+  try {
+    const response = await fetch(`/api/month-availability?${params.toString()}`);
+    const data = await response.json();
+    if (!data.ok) {
+      calGrid.innerHTML = `<div class="small" style="grid-column:1/-1">${data.error || 'Failed to load month availability.'}</div>`;
+      calNote.textContent = '';
+      return;
+    }
+    calNote.textContent = `Using appointment type ${data.appointmentTypeId} across ${data.calendarIDs.length} calendar${data.calendarIDs.length === 1 ? '' : 's'}.`;
+    renderMonthGrid(data);
+  } catch (error) {
+    calGrid.innerHTML = `<div class="small" style="grid-column:1/-1">${error?.message || 'Failed to load month availability.'}</div>`;
+    calNote.textContent = '';
+  }
+};
+
+prevMonthBtn?.addEventListener('click', () => {
+  currentMonthISO = shiftMonth(currentMonthISO, -1);
+  loadMonth();
+});
+
+nextMonthBtn?.addEventListener('click', () => {
+  currentMonthISO = shiftMonth(currentMonthISO, 1);
+  loadMonth();
+});
+
+$('account')?.addEventListener('change', () => {
+  currentMonthISO = currentMonthISO || `${todayIso().slice(0, 7)}-01`;
+  loadMonth();
+});
+
+locationSelect?.addEventListener('change', () => {
+  currentMonthISO = currentMonthISO || `${todayIso().slice(0, 7)}-01`;
+  loadMonth();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadMonth();
+});
+
+loadMonth();
 </script>
 </body></html>

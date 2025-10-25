@@ -213,6 +213,24 @@ const addDaysISO = (isoDate, amount, tz = DEFAULT_TZ) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const startOfMonthISO = (isoDate, tz = DEFAULT_TZ) => {
+  const base = typeof isoDate === "string" && isoDate ? isoDate : "";
+  const reference = /^\d{4}-\d{2}-\d{2}$/.test(base)
+    ? new Date(`${base}T00:00:00Z`)
+    : new Date();
+  const zoned = new Date(reference.toLocaleString("en-US", { timeZone: tz }));
+  zoned.setDate(1);
+  const year = zoned.getFullYear();
+  const month = String(zoned.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}-01`;
+};
+
+const daysInMonth = (isoDate, tz = DEFAULT_TZ) => {
+  const start = startOfMonthISO(isoDate, tz);
+  const [year, month] = start.split("-").map(Number);
+  return new Date(year, month, 0).getDate();
+};
+
 module.exports = {
   DEFAULT_TZ,
   normalizeAccount,
@@ -225,6 +243,8 @@ module.exports = {
   normalizeLocation,
   groupTimesMerge,
   addDaysISO,
+  startOfMonthISO,
+  daysInMonth,
   TTL_MS,
   CORS_ORIGINS,
   loadCityTypes,
