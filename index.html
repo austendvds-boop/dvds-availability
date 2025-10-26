@@ -36,7 +36,13 @@
 <div class="wrap">
   <div class="card">
     <h1>DVDS Availability (pooled by location)</h1>
-    <div id="locPills" class="row"></div>
+    <div class="row" style="align-items:flex-end;gap:10px">
+      <div style="flex:1 1 260px">
+        <label class="small" for="locationSelect">Location</label>
+        <select id="locationSelect"></select>
+      </div>
+      <div id="locPills" class="row" style="flex:2 1 auto;margin:0"></div>
+    </div>
     <div class="grid">
       <div>
         <label class="small" for="date">Start date</label>
@@ -85,6 +91,7 @@ const tz = 'America/Phoenix';
 $('date').value = new Date().toLocaleDateString('en-CA', { timeZone: tz });
 
 let selection = { account: null, location: null, appointmentTypeId: null, label: null };
+let locationCache = [];
 let currentMonthISO = (() => {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
   return today.slice(0, 7) + '-01';
@@ -136,22 +143,45 @@ const selectLocation = async (loc) => {
   [...document.querySelectorAll('.pill')].forEach((pill) => {
     pill.classList.toggle('active', pill.dataset.key === loc.key && pill.dataset.account === loc.account);
   });
+  const selectEl = $('locationSelect');
+  if (selectEl && selectEl.value !== loc.key) {
+    selectEl.value = loc.key;
+  }
   await resolveSetup();
   await loadMonth();
 };
 
-const buildLocationPills = async () => {
+const buildLocationControls = async () => {
   const container = $('locPills');
   container.innerHTML = '<span class="small">Loading locations…</span>';
   try {
     const data = await fetchJSON('/api/locations');
     if (!data.locations || !data.locations.length) {
       container.innerHTML = '<span class="small">No pooled locations have calendar IDs yet. Update <code>location-config.json</code> to enable them.</span>';
+      const select = $('locationSelect');
+      if (select) {
+        select.innerHTML = '<option value="">Select a location</option>';
+      }
       return;
     }
 
     container.innerHTML = '';
-    data.locations.forEach((loc, index) => {
+    locationCache = data.locations;
+
+    const select = $('locationSelect');
+    if (select) {
+      select.innerHTML = '';
+      locationCache.forEach((loc) => {
+        const option = document.createElement('option');
+        option.value = loc.key;
+        option.textContent = loc.calendarCount
+          ? `${loc.label} (${loc.calendarCount})`
+          : loc.label;
+        select.appendChild(option);
+      });
+    }
+
+    locationCache.forEach((loc, index) => {
       const pill = document.createElement('button');
       pill.className = 'pill';
       pill.dataset.account = loc.account;
@@ -167,6 +197,18 @@ const buildLocationPills = async () => {
     });
   } catch (error) {
     container.innerHTML = `<span class="small">${error.message}</span>`;
+    const select = $('locationSelect');
+    if (select) {
+      select.innerHTML = '<option value="">Select a location</option>';
+    }
+  }
+};
+
+const handleLocationSelect = (event) => {
+  const selectedKey = event.target.value;
+  const match = locationCache.find((loc) => loc.key === selectedKey);
+  if (match) {
+    selectLocation(match);
   }
 };
 
@@ -337,7 +379,8 @@ const loadDay = async (ymd) => {
 $('prev').onclick = () => { currentMonthISO = shiftMonth(currentMonthISO, -1); loadMonth(); };
 $('next').onclick = () => { currentMonthISO = shiftMonth(currentMonthISO, 1); loadMonth(); };
 
-buildLocationPills();
+$('locationSelect').addEventListener('change', handleLocationSelect);
+buildLocationControls();
 </script>
 </body>
 </html>
