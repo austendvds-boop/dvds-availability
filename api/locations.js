@@ -1,4 +1,8 @@
-const { applyCors, loadCityTypes } = require("./_acuity");
+const {
+  applyCors,
+  loadCityTypes,
+  getConfiguredLocationIds
+} = require("./_acuity");
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -19,18 +23,29 @@ module.exports = async (req, res) => {
     for (const account of ["main", "parents"]) {
       const entries = cityTypes[account] || {};
       for (const [key, appointmentTypeId] of Object.entries(entries)) {
+        const { configuredIds } = getConfiguredLocationIds(account, key);
+        if (!configuredIds.length) {
+          continue;
+        }
+
         locations.push({
           key,
           label: key.replace(/\b\w/g, (char) => char.toUpperCase()),
           account,
-          appointmentTypeId: String(appointmentTypeId)
+          appointmentTypeId: String(appointmentTypeId),
+          configuredIds,
+          calendarCount: configuredIds.length
         });
       }
     }
 
     locations.sort((a, b) => a.label.localeCompare(b.label));
 
-    return res.status(200).json({ ok: true, locations });
+    return res.status(200).json({
+      ok: true,
+      locations,
+      configuredCount: locations.length
+    });
   } catch (error) {
     return res.status(500).json({
       ok: false,

@@ -7,7 +7,7 @@ This repo exposes zero-config Vercel serverless functions for Deer Valley Drivin
 ## Endpoints
 
 - [`GET /api/ping`](https://dvds-availability.vercel.app/api/ping) – Health check.
-- [`GET /api/locations`](https://dvds-availability.vercel.app/api/locations) – Ordered list of configured cities with the account + appointment type each location uses.
+- [`GET /api/locations`](https://dvds-availability.vercel.app/api/locations) – Ordered list of pooled cities that currently have strict calendar IDs configured, including the owning account and appointment type.
 - [`GET /api/calendars?account=main`](https://dvds-availability.vercel.app/api/calendars?account=main) – Cached pass-through to Acuity calendars (`?account=parents` for the second tenant).
 - [`GET /api/appointment-types?account=main`](https://dvds-availability.vercel.app/api/appointment-types?account=main) – Lists appointment types for the requested account.
 - [`GET /api/zip-route?zip=85254`](https://dvds-availability.vercel.app/api/zip-route?zip=85254) – Resolves an Arizona ZIP to the canonical location, account, appointment type, and cached calendar ID.
@@ -23,7 +23,7 @@ CORS allows the production domains (`www.deervalleydrivingschool.com` and `dvds-
 
 The root [`index.html`](./index.html) is a lightweight dashboard:
 
-1. The page fetches `/api/locations` and renders each configured city as a pill. Selecting a pill automatically sets the correct account and appointment type.
+1. The page fetches `/api/locations` and renders each pooled city (only those with strict calendar IDs) as a pill, including a badge that shows how many calendars are mapped. Selecting a pill automatically sets the correct account and appointment type.
 2. The **Fetch pooled availability** button queries `/api/location-availability`, showing merged instructor slots for the chosen date range.
 3. Diagnostics underneath the controls surface the configured calendar IDs, Acuity’s allow list, and the final IDs the API will use. Buttons disable automatically if the strict configuration is incomplete.
 4. The **Monthly availability** card calls `/api/month-availability` to paint a calendar heatmap. Clicking a day drills into that date’s live slots using the pooled endpoint.

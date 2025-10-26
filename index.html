@@ -146,7 +146,7 @@ const buildLocationPills = async () => {
   try {
     const data = await fetchJSON('/api/locations');
     if (!data.locations || !data.locations.length) {
-      container.innerHTML = '<span class="small">No locations configured.</span>';
+      container.innerHTML = '<span class="small">No pooled locations have calendar IDs yet. Update <code>location-config.json</code> to enable them.</span>';
       return;
     }
 
@@ -156,7 +156,9 @@ const buildLocationPills = async () => {
       pill.className = 'pill';
       pill.dataset.account = loc.account;
       pill.dataset.key = loc.key;
-      pill.textContent = loc.label;
+      pill.textContent = loc.calendarCount
+        ? `${loc.label} (${loc.calendarCount})`
+        : loc.label;
       pill.onclick = () => selectLocation(loc);
       container.appendChild(pill);
       if (index === 0) {
