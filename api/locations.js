@@ -1,0 +1,40 @@
+const { applyCors, loadCityTypes } = require("./_acuity");
+
+module.exports = async (req, res) => {
+  applyCors(req, res);
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET, OPTIONS");
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
+  try {
+    const cityTypes = loadCityTypes();
+    const locations = [];
+
+    for (const account of ["main", "parents"]) {
+      const entries = cityTypes[account] || {};
+      for (const [key, appointmentTypeId] of Object.entries(entries)) {
+        locations.push({
+          key,
+          label: key.replace(/\b\w/g, (char) => char.toUpperCase()),
+          account,
+          appointmentTypeId: String(appointmentTypeId)
+        });
+      }
+    }
+
+    locations.sort((a, b) => a.label.localeCompare(b.label));
+
+    return res.status(200).json({ ok: true, locations });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "Failed to load locations"
+    });
+  }
+};

@@ -8,22 +8,23 @@
   :root{--bg:#0b1320;--panel:#111827;--ink:#e5e7eb;--muted:#94a3b8;--brand:#34b16a;--edge:#263042}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,Segoe UI,Roboto}
-  .wrap{max-width:1100px;margin:36px auto;padding:0 16px;display:flex;flex-direction:column;gap:18px}
+  .wrap{max-width:1120px;margin:36px auto;padding:0 16px;display:flex;flex-direction:column;gap:18px}
   .card{background:var(--panel);border-radius:18px;box-shadow:0 10px 24px rgba(0,0,0,.35);padding:20px}
-  h1{margin:0 0 12px;font-size:26px}
+  h1{margin:0 0 12px;font-size:28px}
   h2{margin:0 0 10px;font-size:20px}
-  label{display:block;margin:10px 0 6px;color:var(--muted)}
+  .small{font-size:13px;color:var(--muted)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}
+  @media (max-width:900px){.grid{grid-template-columns:1fr 1fr}}
+  @media (max-width:560px){.grid{grid-template-columns:1fr}}
   select,input,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--edge);background:#0f172a;color:var(--ink)}
   button{background:var(--brand);border:none;color:#052814;font-weight:700;cursor:pointer}
   button[disabled]{opacity:.45;cursor:not-allowed}
-  .grid{display:grid;gap:12px;grid-template-columns:repeat(4,1fr)}
-  @media (max-width:900px){.grid{grid-template-columns:1fr 1fr}}
-  @media (max-width:560px){.grid{grid-template-columns:1fr}}
-  .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+  .pill{display:inline-block;padding:10px 14px;border:1px solid var(--edge);border-radius:999px;margin:6px;background:#0f172a;color:inherit;cursor:pointer}
+  .pill.active{background:var(--brand);color:#052814;border-color:transparent;font-weight:800}
   .badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#0a1222;border:1px solid var(--edge);font-size:12px;color:var(--muted)}
   .slots{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:12px}
   .slot{background:#0a1222;border:1px solid var(--edge);border-radius:12px;padding:12px}
-  .small{font-size:13px;color:var(--muted)}
   #calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:10px}
   .cal-head{font-size:13px;color:var(--muted);text-align:center}
   .cal-cell{border:1px solid var(--edge);border-radius:12px;padding:10px;background:#0f172a;color:inherit}
@@ -35,24 +36,14 @@
 <div class="wrap">
   <div class="card">
     <h1>DVDS Availability (pooled by location)</h1>
+    <div id="locPills" class="row"></div>
     <div class="grid">
       <div>
-        <label>Account</label>
-        <select id="account">
-          <option value="main">Main</option>
-          <option value="parents">Parents</option>
-        </select>
-      </div>
-      <div>
-        <label>Location</label>
-        <select id="location"></select>
-      </div>
-      <div>
-        <label>Date</label>
+        <label class="small" for="date">Start date</label>
         <input id="date" type="date" />
       </div>
       <div>
-        <label>Days (1–7)</label>
+        <label class="small" for="days">Days (1–7)</label>
         <select id="days">
           <option value="1">1</option>
           <option value="2">2</option>
@@ -63,9 +54,12 @@
           <option value="7" selected>7</option>
         </select>
       </div>
+      <div>
+        <label class="small" style="visibility:hidden">Fetch</label>
+        <button id="fetch" disabled>Fetch pooled availability</button>
+      </div>
     </div>
-    <div class="row">
-      <button id="fetch">Fetch pooled availability</button>
+    <div class="row" style="align-items:center">
       <span id="meta" class="badge">waiting…</span>
     </div>
     <div id="hint" class="small" style="margin-top:6px"></div>
@@ -87,196 +81,174 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const meta = $('meta');
-const hint = $('hint');
-const note = $('note');
-const slots = $('slots');
-const calGrid = $('calGrid');
-const calLabel = $('calLabel');
-const calMsg = $('calMsg');
-
 const tz = 'America/Phoenix';
 $('date').value = new Date().toLocaleDateString('en-CA', { timeZone: tz });
 
-let locationLists = { main: [], parents: [] };
-let currentTypeId = null;
-
-const formatCity = (value) =>
-  value.replace(/\b\w/g, (c) => c.toUpperCase());
-
-const fetchJSON = async (url) => {
-  const response = await fetch(url);
-  const text = await response.text();
-  let data = {};
-  if (text) {
-    try { data = JSON.parse(text); } catch { data = {}; }
-  }
-  if (!response.ok) {
-    const error = new Error(data.error || response.statusText || 'Request failed');
-    error.data = data;
-    error.status = response.status;
-    throw error;
-  }
-  return data;
-};
-
-async function loadLocationLists() {
-  const [main, parents] = await Promise.all([
-    fetchJSON('/api/resolve-city?list=1&account=main'),
-    fetchJSON('/api/resolve-city?list=1&account=parents')
-  ]);
-  locationLists = {
-    main: main.cities || [],
-    parents: parents.cities || []
-  };
-  renderLocations(undefined, $('account').value);
-}
-
-function renderLocations(selectedLocation, preferredAccount) {
-  const select = $('location');
-  select.innerHTML = '';
-  const accounts = [
-    { key: 'main', label: 'Main account' },
-    { key: 'parents', label: 'Parents account' }
-  ];
-  let firstValue = null;
-  let firstValuePreferred = false;
-  for (const { key, label } of accounts) {
-    const cities = locationLists[key];
-    if (!cities || !cities.length) continue;
-    const group = document.createElement('optgroup');
-    group.label = label;
-    cities.forEach((city) => {
-      const option = document.createElement('option');
-      option.value = city;
-      option.dataset.account = key;
-      option.textContent = formatCity(city);
-      if (!firstValue || (preferredAccount && !firstValuePreferred && key === preferredAccount)) {
-        firstValue = city;
-        firstValuePreferred = key === preferredAccount;
-      }
-      if (selectedLocation && selectedLocation === city) {
-        option.selected = true;
-      }
-      group.appendChild(option);
-    });
-    select.appendChild(group);
-  }
-  if (!select.value && firstValue) {
-    select.value = firstValue;
-  }
-  syncAccountWithLocation();
-}
-
-function syncAccountWithLocation() {
-  const locOption = $('location').selectedOptions[0];
-  if (!locOption) return;
-  const account = locOption.dataset.account || 'main';
-  $('account').value = account;
-}
-
-async function resolveSetup() {
-  const account = $('account').value;
-  const locOption = $('location').selectedOptions[0];
-  if (!locOption) {
-    hint.textContent = 'No locations configured';
-    $('fetch').disabled = true;
-    return;
-  }
-  const location = locOption.value;
-
-  try {
-    const cityInfo = await fetchJSON(`/api/resolve-city?account=${account}&location=${encodeURIComponent(location)}`);
-    currentTypeId = cityInfo.typeId || null;
-  } catch (error) {
-    hint.textContent = error.data?.error || error.message;
-    $('fetch').disabled = true;
-    return;
-  }
-
-  try {
-    const params = new URLSearchParams({ account, location });
-    if (currentTypeId) params.set('appointmentTypeId', currentTypeId);
-    const res = await fetchJSON(`/api/resolve-location?${params}`);
-    const configured = res.configuredIds?.join(', ') || '—';
-    const allowed = res.typeCalendarIds?.join(', ') || '—';
-    const finalIds = res.intersection?.join(', ') || '—';
-    hint.textContent = `Configured IDs: ${configured} · Type-allowed: ${allowed} · Final IDs: ${finalIds}`;
-    $('fetch').disabled = !res.intersection || !res.intersection.length;
-  } catch (error) {
-    const data = error.data || {};
-    hint.textContent = data.error || error.message;
-    $('fetch').disabled = true;
-  }
-
-  note.textContent = currentTypeId
-    ? `Using appointment type ${currentTypeId} for ${formatCity(location)}.`
-    : 'No appointment type configured for this location. Update city-types.json.';
-}
-
-$('account').addEventListener('change', async () => {
-  renderLocations(undefined, $('account').value);
-  syncAccountWithLocation();
-  await resolveSetup();
-  await loadMonth();
-});
-
-$('location').addEventListener('change', async () => {
-  syncAccountWithLocation();
-  await resolveSetup();
-  await loadMonth();
-});
-
-$('days').addEventListener('change', () => {});
-
-const fmtTime = (iso) => {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  } catch {
-    return iso;
-  }
-};
-
-$('fetch').onclick = async () => {
-  meta.textContent = 'Loading…';
-  slots.innerHTML = '';
-  const account = $('account').value;
-  const location = $('location').value;
-  const date = $('date').value;
-  const days = $('days').value;
-  const params = new URLSearchParams({ account, location, date, days });
-  if (currentTypeId) params.set('appointmentTypeId', currentTypeId);
-
-  try {
-    const data = await fetchJSON(`/api/location-availability?${params}`);
-    const totalTimes = data.results?.reduce((sum, day) => sum + (day.times?.length || 0), 0) || 0;
-    meta.textContent = `Merged ${totalTimes} slots across ${data.pooledCalendarIDs?.length || 0} calendar(s)`;
-    if (!data.results || !data.results.length) {
-      slots.innerHTML = '<div class="small">No slots for this selection.</div>';
-      return;
-    }
-    const firstDay = data.results[0];
-    if (!firstDay.times || !firstDay.times.length) {
-      slots.innerHTML = '<div class="small">No slots for this selection.</div>';
-      return;
-    }
-    slots.innerHTML = firstDay.times.map((entry) => `
-      <div class="slot">
-        <div><strong>${fmtTime(entry.time)}</strong></div>
-        <div class="small">pooled slots: ${entry.slots || 0}</div>
-      </div>
-    `).join('');
-  } catch (error) {
-    const msg = error.data?.error || error.message;
-    meta.textContent = 'Error';
-    slots.innerHTML = `<div class="small">${msg}</div>`;
-  }
-};
-
+let selection = { account: null, location: null, appointmentTypeId: null, label: null };
 let currentMonthISO = (() => {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
   return today.slice(0, 7) + '-01';
 })();
+
+const formatTime = (iso) => {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch (error) {
+    return iso;
+  }
+};
+
+const fetchJSON = async (url) => {
+  const response = await fetch(url);
+  const text = await response.text();
+  let body = {};
+  if (text) {
+    try { body = JSON.parse(text); } catch (error) { body = {}; }
+  }
+  if (!response.ok) {
+    const error = new Error(body.error || response.statusText || 'Request failed');
+    error.data = body;
+    error.status = response.status;
+    throw error;
+  }
+  return body;
+};
+
+const setStatus = (message) => { $('meta').textContent = message; };
+
+const renderSlots = (times = []) => {
+  if (!times.length) {
+    $('slots').innerHTML = '<div class="small">No slots for this selection.</div>';
+    return;
+  }
+  $('slots').innerHTML = times
+    .map((entry) => `
+      <div class="slot">
+        <div><strong>${formatTime(entry.time)}</strong></div>
+        <div class="small">pooled slots: ${entry.slots || 0}</div>
+      </div>
+    `)
+    .join('');
+};
+
+const selectLocation = async (loc) => {
+  selection = { ...loc, location: loc.key, label: loc.label };
+  [...document.querySelectorAll('.pill')].forEach((pill) => {
+    pill.classList.toggle('active', pill.dataset.key === loc.key && pill.dataset.account === loc.account);
+  });
+  await resolveSetup();
+  await loadMonth();
+};
+
+const buildLocationPills = async () => {
+  const container = $('locPills');
+  container.innerHTML = '<span class="small">Loading locations…</span>';
+  try {
+    const data = await fetchJSON('/api/locations');
+    if (!data.locations || !data.locations.length) {
+      container.innerHTML = '<span class="small">No locations configured.</span>';
+      return;
+    }
+
+    container.innerHTML = '';
+    data.locations.forEach((loc, index) => {
+      const pill = document.createElement('button');
+      pill.className = 'pill';
+      pill.dataset.account = loc.account;
+      pill.dataset.key = loc.key;
+      pill.textContent = loc.label;
+      pill.onclick = () => selectLocation(loc);
+      container.appendChild(pill);
+      if (index === 0) {
+        selectLocation(loc);
+      }
+    });
+  } catch (error) {
+    container.innerHTML = `<span class="small">${error.message}</span>`;
+  }
+};
+
+const resolveSetup = async () => {
+  if (!selection.location) {
+    setStatus('waiting…');
+    $('fetch').disabled = true;
+    $('hint').textContent = 'Select a location to continue.';
+    $('note').textContent = '';
+    return;
+  }
+
+  const params = new URLSearchParams({
+    account: selection.account,
+    location: selection.location,
+    appointmentTypeId: selection.appointmentTypeId
+  });
+
+  try {
+    const result = await fetchJSON(`/api/resolve-location?${params.toString()}`);
+    if (!result.ok) {
+      setStatus('waiting…');
+      $('hint').textContent = result.error || 'Location is not configured.';
+      $('note').textContent = '';
+      $('fetch').disabled = true;
+      return;
+    }
+
+    const configured = result.configuredIds?.join(', ') || '—';
+    const allowed = result.typeCalendarIds?.join(', ') || '—';
+    const finalIds = result.intersection?.join(', ') || '—';
+
+    $('hint').textContent = `Account ${result.account} · Type ${result.appointmentTypeId} · Configured: [${configured}] · Allowed: [${allowed}] · Final: [${finalIds}]`;
+    $('fetch').disabled = !result.intersection || !result.intersection.length;
+    selection.account = result.account;
+    selection.appointmentTypeId = result.appointmentTypeId;
+    selection.location = result.location;
+    setStatus(result.intersection && result.intersection.length ? 'Ready' : 'waiting…');
+  } catch (error) {
+    setStatus('waiting…');
+    $('hint').textContent = error.data?.error || error.message;
+    $('fetch').disabled = true;
+    return;
+  }
+
+  $('note').textContent = `Using appointment type ${selection.appointmentTypeId} for ${selection.label || selection.location}.`;
+};
+
+$('fetch').onclick = async () => {
+  if (!selection.location) return;
+  setStatus('Loading…');
+  $('slots').innerHTML = '';
+
+  const params = new URLSearchParams({
+    account: selection.account,
+    location: selection.location,
+    date: $('date').value,
+    days: $('days').value
+  });
+  if (selection.appointmentTypeId) {
+    params.set('appointmentTypeId', selection.appointmentTypeId);
+  }
+
+  try {
+    const data = await fetchJSON(`/api/location-availability?${params.toString()}`);
+    const totalTimes = data.results?.reduce((sum, day) => sum + (day.times?.length || 0), 0) || 0;
+    setStatus(`Merged ${totalTimes} slots across ${data.pooledCalendarIDs?.length || 0} calendar(s)`);
+    if (!data.results || !data.results.length) {
+      renderSlots([]);
+      return;
+    }
+    const firstDay = data.results[0];
+    renderSlots(firstDay.times || []);
+  } catch (error) {
+    setStatus('Error');
+    $('slots').innerHTML = `<div class="small">${error.data?.error || error.message}</div>`;
+  }
+};
+
+$('days').addEventListener('change', () => {
+  if (selection.location) {
+    $('fetch').click();
+  }
+});
 
 const monthLabel = (ymd) => {
   const dt = new Date(ymd + 'T00:00:00');
@@ -286,35 +258,38 @@ const monthLabel = (ymd) => {
 const shiftMonth = (ymd, delta) => {
   const dt = new Date(ymd + 'T00:00:00');
   dt.setMonth(dt.getMonth() + delta);
-  const year = dt.getFullYear();
-  const month = String(dt.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}-01`;
+  return dt.toISOString().slice(0, 7) + '-01';
 };
 
-async function loadMonth() {
-  const account = $('account').value;
-  const locOption = $('location').selectedOptions[0];
-  if (!locOption) {
-    calGrid.innerHTML = '<div class="small">Configure locations to view the calendar.</div>';
+const loadMonth = async () => {
+  if (!selection.location) {
+    $('calGrid').innerHTML = '<div class="small">Pick a location to view the calendar.</div>';
     return;
   }
-  const location = locOption.value;
-  const params = new URLSearchParams({ account, location, date: currentMonthISO });
-  if (currentTypeId) params.set('appointmentTypeId', currentTypeId);
 
-  calLabel.textContent = monthLabel(currentMonthISO);
-  calGrid.innerHTML = '<div class="small" style="grid-column:1/-1">Loading…</div>';
-  calMsg.textContent = '';
+  $('calLabel').textContent = monthLabel(currentMonthISO);
+  $('calGrid').innerHTML = '<div class="small" style="grid-column:1/-1">Loading…</div>';
+  $('calMsg').textContent = '';
+
+  const params = new URLSearchParams({
+    account: selection.account,
+    location: selection.location,
+    date: currentMonthISO
+  });
+  if (selection.appointmentTypeId) {
+    params.set('appointmentTypeId', selection.appointmentTypeId);
+  }
 
   try {
-    const data = await fetchJSON(`/api/month-availability?${params}`);
+    const data = await fetchJSON(`/api/month-availability?${params.toString()}`);
     const headers = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    calGrid.innerHTML = headers.map((h) => `<div class="cal-head">${h}</div>`).join('');
+    const grid = $('calGrid');
+    grid.innerHTML = headers.map((h) => `<div class="cal-head">${h}</div>`).join('');
 
-    const dt = new Date(currentMonthISO + 'T00:00:00');
-    const first = new Date(dt.getFullYear(), dt.getMonth(), 1);
+    const base = new Date(currentMonthISO + 'T00:00:00');
+    const first = new Date(base.getFullYear(), base.getMonth(), 1);
     for (let i = 0; i < first.getDay(); i += 1) {
-      calGrid.insertAdjacentHTML('beforeend', '<div class="cal-cell" style="opacity:.2"></div>');
+      grid.insertAdjacentHTML('beforeend', '<div class="cal-cell" style="opacity:.2"></div>');
     }
 
     for (let day = 1; day <= data.days; day += 1) {
@@ -326,51 +301,41 @@ async function loadMonth() {
       const cell = document.createElement('button');
       cell.className = 'cal-cell';
       cell.innerHTML = `<div class="cal-day">${day}</div><div class="cal-count">${count} slots</div>`;
-      cell.onclick = async () => {
-        $('date').value = ymd;
-        const qs = new URLSearchParams({ account, location, date: ymd, days: '1' });
-        if (currentTypeId) qs.set('appointmentTypeId', currentTypeId);
-        try {
-          const dayData = await fetchJSON(`/api/location-availability?${qs}`);
-          const times = dayData.results?.[0]?.times || [];
-          if (!times.length) {
-            calMsg.textContent = `No times for ${ymd}`;
-            slots.innerHTML = '';
-            return;
-          }
-          calMsg.textContent = `Times for ${ymd}`;
-          slots.innerHTML = times.map((entry) => `
-            <div class="slot">
-              <div><strong>${fmtTime(entry.time)}</strong></div>
-              <div class="small">pooled slots: ${entry.slots || 0}</div>
-            </div>
-          `).join('');
-          window.scrollTo({ top: document.querySelector('.wrap').offsetTop, behavior: 'smooth' });
-        } catch (error) {
-          const msg = error.data?.error || error.message;
-          calMsg.textContent = msg;
-        }
-      };
-      calGrid.appendChild(cell);
+      cell.onclick = () => loadDay(ymd);
+      grid.appendChild(cell);
     }
   } catch (error) {
-    calGrid.innerHTML = `<div class="small" style="grid-column:1/-1">${error.data?.error || error.message}</div>`;
+    $('calGrid').innerHTML = `<div class="small" style="grid-column:1/-1">${error.data?.error || error.message}</div>`;
   }
-}
+};
+
+const loadDay = async (ymd) => {
+  $('date').value = ymd;
+  const params = new URLSearchParams({
+    account: selection.account,
+    location: selection.location,
+    date: ymd,
+    days: '1'
+  });
+  if (selection.appointmentTypeId) {
+    params.set('appointmentTypeId', selection.appointmentTypeId);
+  }
+
+  try {
+    const dayData = await fetchJSON(`/api/location-availability?${params.toString()}`);
+    const times = dayData.results?.[0]?.times || [];
+    $('calMsg').textContent = times.length ? `Times for ${ymd}` : `No times for ${ymd}`;
+    renderSlots(times);
+    window.scrollTo({ top: document.querySelector('.wrap').offsetTop, behavior: 'smooth' });
+  } catch (error) {
+    $('calMsg').textContent = error.data?.error || error.message;
+  }
+};
 
 $('prev').onclick = () => { currentMonthISO = shiftMonth(currentMonthISO, -1); loadMonth(); };
 $('next').onclick = () => { currentMonthISO = shiftMonth(currentMonthISO, 1); loadMonth(); };
 
-(async function init() {
-  try {
-    await loadLocationLists();
-    await resolveSetup();
-    await loadMonth();
-  } catch (error) {
-    hint.textContent = error.message;
-    $('fetch').disabled = true;
-  }
-})();
+buildLocationPills();
 </script>
 </body>
 </html>
