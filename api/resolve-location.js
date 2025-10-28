@@ -15,7 +15,12 @@ module.exports = async (req, res) => {
     }
 
     const appointmentTypeId = String((types[account] || {})[location] || "");
-    if (!appointmentTypeId) return res.status(400).json({ ok: false, error: "Missing appointmentTypeId" });
+    if (!appointmentTypeId) {
+      return res.status(400).json({
+        ok: false,
+        error: "Missing appointmentTypeId (configure city-types.json)"
+      });
+    }
 
     const configuredIds = (cfg[account] && cfg[account][location])
       ? cfg[account][location].map(Number).filter(Boolean)
@@ -26,7 +31,7 @@ module.exports = async (req, res) => {
         account,
         location,
         appointmentTypeId,
-        error: "No calendars configured for this location (strict)"
+        error: "No calendars configured for this location (location-config.json)"
       });
     }
 
