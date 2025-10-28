@@ -1,0 +1,12 @@
+{
+  "student": {
+    "id": "student",
+    "label": "Student Driving Lessons",
+    "description": "Standard on-road lessons for students."
+  },
+  "parent": {
+    "id": "parent",
+    "label": "Parent Classes",
+    "description": "Parent-taught program coordination sessions."
+  }
+}

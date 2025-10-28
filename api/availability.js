@@ -1,7 +1,15 @@
-const path = require("path");
+const { getLocations, toAcuityMetadata } = require('./_acuity');
 
-const checkCityData = require(path.join(__dirname, "check_city.json"));
+module.exports = (_req, res) => {
+  const grouped = {
+    studentLocations: {},
+    parentLocations: {},
+  };
 
-module.exports = (req, res) => {
-  res.status(200).json({ ok: true, locations: checkCityData });
+  for (const loc of getLocations()) {
+    const bucket = loc.type === 'parent' ? 'parentLocations' : 'studentLocations';
+    grouped[bucket][loc.label] = toAcuityMetadata(loc);
+  }
+
+  res.status(200).json({ ok: true, locations: grouped });
 };

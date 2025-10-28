@@ -1,0 +1,184 @@
+{
+  "locations": [
+    {
+      "key": "awatukee",
+      "label": "Awatukee",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "76043315",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "apache-junction",
+      "label": "Apache Junction",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50528555",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "casa-grande",
+      "label": "Casa Grande",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "70526040",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "cave-creek",
+      "label": "Cave Creek",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "63747690",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "downtown-phoenix",
+      "label": "Downtown Phoenix",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50528736",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "gilbert",
+      "label": "Gilbert",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "44842749",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "mesa",
+      "label": "Mesa",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "44842781",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "queen-creek",
+      "label": "Queen Creek",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50528913",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "san-tan-valley",
+      "label": "San Tan Valley",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50528924",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "scottsdale",
+      "label": "Scottsdale",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "53640646",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "tempe",
+      "label": "Tempe",
+      "type": "student",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50528939",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    },
+    {
+      "key": "anthem",
+      "label": "Anthem",
+      "type": "parent",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50529545",
+        "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+      }
+    },
+    {
+      "key": "glendale",
+      "label": "Glendale",
+      "type": "parent",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50529778",
+        "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+      }
+    },
+    {
+      "key": "north-phoenix",
+      "label": "North Phoenix",
+      "type": "parent",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "80856319",
+        "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+      }
+    },
+    {
+      "key": "peoria",
+      "label": "Peoria",
+      "type": "parent",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50529862",
+        "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+      }
+    },
+    {
+      "key": "sun-city",
+      "label": "Sun City",
+      "type": "parent",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50529915",
+        "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+      }
+    },
+    {
+      "key": "surprise",
+      "label": "Surprise",
+      "type": "parent",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50529929",
+        "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+      }
+    },
+    {
+      "key": "chandler",
+      "label": "Chandler",
+      "type": "parent",
+      "acuity": {
+        "owner": "23214568",
+        "appointmentType": "50528663",
+        "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+      }
+    }
+  ]
+}

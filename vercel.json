@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "public": true,
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs20.x",
+      "includeFiles": [
+        "city-types.json",
+        "location-config.json"
+      ]
+    }
+  },
+  "routes": [
+    { "src": "^/api/.*", "dest": "/api$0" },
+    { "src": "^/$", "dest": "/index.html" },
+    { "src": "^(?!/api)(/.*)$", "dest": "$1" }
+  ]
+}
