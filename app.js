@@ -10,16 +10,14 @@ function cacheKey(city, from, to) {
 async function getJSON(url) {
   const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), { cache: 'no-store' });
   if (!r.ok) {
-    let body;
-    try {
-      body = await r.json();
-    } catch {
-      body = { error: `HTTP ${r.status}` };
-    }
-    const msg = body && (body.detail || body.error)
-      ? `${body.error || ''} ${body.detail || ''}`.trim()
+    let body = null;
+    try { body = await r.json(); } catch {}
+    const detail = body && body.detail;
+    const error = body && body.error;
+    const msg = (error || detail)
+      ? `${error || ''} ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`.trim()
       : `HTTP ${r.status}`;
-    throw new Error(msg || `HTTP ${r.status}`);
+    throw new Error(msg);
   }
   return r.json();
 }
@@ -81,9 +79,8 @@ function ymd(d) {
         renderAvailability(avail, city, tz, open, out);
       } catch (e) {
         try {
-          const r = await fetch(`${availabilityUrl}&v=${Date.now()}`, { cache: 'no-store' });
-          const text = await r.text();
-          out.textContent = text;
+          const r = await fetch(`${API.availability}?city=${encodeURIComponent(cityName)}&from=${today}&to=${to}`);
+          out.textContent = await r.text();
         } catch {
           out.textContent = JSON.stringify({ ok:false, error:e.message }, null, 2);
         }
