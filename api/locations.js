@@ -51,6 +51,7 @@ module.exports = async (_req, res) => {
         owner,
         baseUrl,
         url,
+        calendar: url,
         config,
       };
     });

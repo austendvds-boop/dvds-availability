@@ -1,73 +1,80 @@
-(async () => {
-  const status = document.getElementById('status');
+async function main() {
+  const statusEl = document.getElementById('status');
   const sel = document.getElementById('location');
   const out = document.getElementById('out');
+  const open = document.getElementById('open');
 
-  const formatLabel = (city) => {
-    const pieces = [city.name || city.key];
-    if (city.account) {
-      pieces.push(`(${city.account})`);
-    }
-    if (!city.url) {
-      pieces.push('⚠ configure');
-    }
-    return pieces.join(' ');
+  const setStatus = (text) => {
+    statusEl.textContent = text;
   };
 
-  const renderDetails = (city) => {
-    const details = {
-      key: city.key,
-      name: city.name,
-      account: city.account,
-      appointmentType: city.appointmentType,
-      owner: city.owner,
-      url: city.url,
-      baseUrl: city.baseUrl,
-    };
-    out.textContent = JSON.stringify(details, null, 2);
-  };
-
-  try {
-    const response = await fetch('/api/locations');
-    const data = await response.json();
-    if (!data.ok) throw new Error(data.error || 'Failed to load locations');
-
-    const cities = Array.isArray(data.cities) ? data.cities : [];
-    sel.innerHTML = '';
-
-    if (!cities.length) {
-      status.textContent = 'No locations';
-      out.textContent = 'No location data available.';
-      return;
+  async function fetchLocations() {
+    try {
+      const response = await fetch('/api/locations', { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.warn('Failed to fetch /api/locations:', error);
+      return { ok: false, error: error.message, cities: [] };
     }
+  }
 
-    cities.forEach((city, idx) => {
-      const opt = document.createElement('option');
-      opt.value = city.key;
-      opt.textContent = formatLabel(city);
-      if (!city.url) {
-        opt.disabled = true;
-      }
-      if (idx === 0 && !opt.disabled) {
-        opt.selected = true;
-        renderDetails(city);
-      }
-      sel.appendChild(opt);
+  setStatus('Fetching…');
+  const data = await fetchLocations();
+
+  if (data.ok && Array.isArray(data.cities) && data.cities.length) {
+    setStatus('Ready');
+    const options = ['<option value="">Select a location…</option>'];
+    data.cities.forEach((city) => {
+      const name = city.name || city.key;
+      options.push(`<option value="${encodeURIComponent(name)}">${name}</option>`);
     });
+    sel.innerHTML = options.join('');
+    sel.disabled = false;
+
+    const showCity = (name) => {
+      const decoded = decodeURIComponent(name);
+      const city = data.cities.find((c) => (c.name || c.key) === decoded);
+      if (!city) {
+        out.textContent = '';
+        open.style.display = 'none';
+        return;
+      }
+      out.textContent = JSON.stringify(city, null, 2);
+      const targetUrl = city.calendar || city.url;
+      if (targetUrl) {
+        open.href = targetUrl;
+        open.textContent = `Open ${decoded} calendar`;
+        open.style.display = 'inline-block';
+      } else {
+        open.style.display = 'none';
+      }
+    };
 
     sel.addEventListener('change', () => {
-      const selected = cities.find((city) => city.key === sel.value);
-      if (selected) {
-        renderDetails(selected);
+      if (sel.value) {
+        showCity(sel.value);
+      } else {
+        out.textContent = '';
+        open.style.display = 'none';
       }
     });
 
-    status.textContent = 'Ready';
-    if (!sel.value) {
-      renderDetails(cities[0]);
+    const firstCity = data.cities[0];
+    if (firstCity) {
+      const firstName = encodeURIComponent(firstCity.name || firstCity.key);
+      sel.value = firstName;
+      showCity(firstName);
     }
-  } catch (error) {
-    status.textContent = 'Error';
-    out.textContent = error?.message || 'Failed to load locations';
+  } else {
+    setStatus('Error');
+    sel.innerHTML = '';
+    sel.disabled = true;
+    out.textContent = JSON.stringify(data, null, 2);
+    open.style.display = 'none';
   }
-})();
+}
+
+main();

@@ -4,18 +4,22 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>DVDS Availability</title>
+  <link rel="icon"
+        href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="white"/><text x="50%" y="52%" font-size="42" text-anchor="middle" dominant-baseline="central">🚘</text></svg>'>
   <style>
     body{font:16px system-ui;margin:24px}
     select,input,button{padding:8px;font:inherit}
     .muted{color:#667}
+    a.button{display:none;margin-top:12px}
   </style>
 </head>
 <body>
   <h1>DVDS Availability</h1>
   <div class="muted">If you see locations below, the API & configs are loading.</div>
   <p><b>Status:</b> <span id="status">Loading…</span></p>
-  <label>Location</label>
-  <select id="location"></select>
+  <label for="location">Location</label>
+  <select id="location" disabled></select>
+  <a id="open" class="button" href="#" target="_blank" rel="noopener">Open calendar</a>
   <pre id="out" class="muted"></pre>
   <script src="/app.js"></script>
 </body>
