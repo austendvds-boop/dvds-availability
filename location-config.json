@@ -1,10 +1,17 @@
 {
   "main": {
-    "scottsdale": [9880609, 5812644],
-    "chandler": [],
-    "anthem": [],
+    "ahwatukee": [],
+    "apache junction": [],
+    "casa grande": [],
+    "cave creek": [],
+    "downtown phoenix": [],
     "gilbert": [],
-    "tempe": []
+    "mesa": [],
+    "queen creek": [],
+    "san tan valley": [],
+    "scottsdale": [9880609, 5812644],
+    "tempe": [],
+    "chandler": []
   },
   "parents": {
     "anthem": [],

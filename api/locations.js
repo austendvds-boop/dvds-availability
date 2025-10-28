@@ -24,9 +24,6 @@ module.exports = async (req, res) => {
       const entries = cityTypes[account] || {};
       for (const [key, appointmentTypeId] of Object.entries(entries)) {
         const { configuredIds } = getConfiguredLocationIds(account, key);
-        if (!configuredIds.length) {
-          continue;
-        }
 
         locations.push({
           key,
@@ -34,12 +31,18 @@ module.exports = async (req, res) => {
           account,
           appointmentTypeId: String(appointmentTypeId),
           configuredIds,
-          calendarCount: configuredIds.length
+          calendarCount: configuredIds.length,
+          isConfigured: configuredIds.length > 0
         });
       }
     }
 
-    locations.sort((a, b) => a.label.localeCompare(b.label));
+    locations.sort((a, b) => {
+      if (a.isConfigured !== b.isConfigured) {
+        return a.isConfigured ? -1 : 1;
+      }
+      return a.label.localeCompare(b.label);
+    });
 
     return res.status(200).json({
       ok: true,

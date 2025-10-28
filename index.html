@@ -169,32 +169,62 @@ const buildLocationControls = async () => {
     locationCache = data.locations;
 
     const select = $('locationSelect');
+    let firstConfigured = null;
+
     if (select) {
       select.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select a location';
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      select.appendChild(placeholder);
+
       locationCache.forEach((loc) => {
         const option = document.createElement('option');
         option.value = loc.key;
-        option.textContent = loc.calendarCount
-          ? `${loc.label} (${loc.calendarCount})`
-          : loc.label;
+        option.textContent = loc.isConfigured
+          ? loc.calendarCount
+            ? `${loc.label} (${loc.calendarCount})`
+            : loc.label
+          : `${loc.label} — configure`;
+        option.disabled = !loc.isConfigured;
         select.appendChild(option);
+        if (!firstConfigured && loc.isConfigured) {
+          firstConfigured = loc;
+        }
       });
     }
 
-    locationCache.forEach((loc, index) => {
+    locationCache.forEach((loc) => {
       const pill = document.createElement('button');
       pill.className = 'pill';
       pill.dataset.account = loc.account;
       pill.dataset.key = loc.key;
-      pill.textContent = loc.calendarCount
-        ? `${loc.label} (${loc.calendarCount})`
-        : loc.label;
-      pill.onclick = () => selectLocation(loc);
-      container.appendChild(pill);
-      if (index === 0) {
-        selectLocation(loc);
+      pill.textContent = loc.isConfigured
+        ? loc.calendarCount
+          ? `${loc.label} (${loc.calendarCount})`
+          : loc.label
+        : `${loc.label} — configure`;
+      if (!loc.isConfigured) {
+        pill.disabled = true;
+        pill.classList.add('disabled');
+      } else {
+        pill.onclick = () => selectLocation(loc);
+        if (!firstConfigured) {
+          firstConfigured = loc;
+        }
       }
+      container.appendChild(pill);
     });
+
+    if (firstConfigured) {
+      selectLocation(firstConfigured);
+    } else {
+      setStatus('waiting…');
+      $('hint').textContent = 'Add calendar IDs in location-config.json to enable pooled locations.';
+      $('fetch').disabled = true;
+    }
   } catch (error) {
     container.innerHTML = `<span class="small">${error.message}</span>`;
     const select = $('locationSelect');
@@ -207,7 +237,7 @@ const buildLocationControls = async () => {
 const handleLocationSelect = (event) => {
   const selectedKey = event.target.value;
   const match = locationCache.find((loc) => loc.key === selectedKey);
-  if (match) {
+  if (match && match.isConfigured) {
     selectLocation(match);
   }
 };
