@@ -72,7 +72,8 @@ module.exports = async (req, res) => {
     const resp = await fetch(acuityURL, { headers: { Authorization: `Basic ${auth}` } });
     if (!resp.ok) {
       const text = await resp.text().catch(()=>"");
-      return res.status(resp.status).json({ ok:false, error:`Acuity ${resp.status}`, detail: text.slice(0,500) });
+      const detail = resp.status === 400 || resp.status === 401 ? text : text.slice(0,500);
+      return res.status(resp.status).json({ ok:false, error:`Acuity ${resp.status}`, detail });
     }
 
     const data = await resp.json(); // array of availability objects

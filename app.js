@@ -9,7 +9,18 @@ function cacheKey(city, from, to) {
 
 async function getJSON(url) {
   const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), { cache: 'no-store' });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) {
+    let body;
+    try {
+      body = await r.json();
+    } catch {
+      body = { error: `HTTP ${r.status}` };
+    }
+    const msg = body && (body.detail || body.error)
+      ? `${body.error || ''} ${body.detail || ''}`.trim()
+      : `HTTP ${r.status}`;
+    throw new Error(msg || `HTTP ${r.status}`);
+  }
   return r.json();
 }
 
@@ -28,6 +39,8 @@ function ymd(d) {
     const data = await getJSON(API.locations);
     if (!data.ok) throw new Error(data.error || 'locations failed');
 
+    const envInfo = await getJSON('/api/env-check').catch(() => ({ timezone: 'America/Phoenix', defaultDays: 14 }));
+
     // Build dropdown
     sel.innerHTML = '<option value="">Select a location…</option>' +
       data.cities.map(c => `<option value="${encodeURIComponent(c.name)}">${c.label || c.name}</option>`).join('');
@@ -38,20 +51,19 @@ function ymd(d) {
       const name = decodeURIComponent(sel.value || '');
       if (!name) return;
 
-      // find selected city record
-      const city = data.cities.find(c => c.name === name || c.label === name) || data.cities.find(c=>c.name===name);
-      const tz = (await getJSON('/api/env-check').catch(()=>({timezone:'America/Phoenix'}))).timezone || 'America/Phoenix';
+      const city = data.cities.find(c => c.name === name || c.label === name) || data.cities.find(c => c.name === name);
+      if (!city) return;
 
-      // date range (today -> +ACUITY_DEFAULT_DAYS or 14 fallback)
-      const today = ymd(Date.now());
+      const tz = envInfo.timezone || 'America/Phoenix';
       const fallbackDays = 14;
-      const defaultDays = Number((window.DEFAULT_DAYS)||fallbackDays);
-      const to = ymd(Date.now() + defaultDays*86400000);
+      const defaultDays = Number(envInfo.defaultDays) || fallbackDays;
+      const today = ymd(Date.now());
+      const to = ymd(Date.now() + defaultDays * 86400000);
+      const cityName = city.name;
 
       out.textContent = 'Fetching availability…';
 
-      // session cache
-      const key = cacheKey(city.name, today, to);
+      const key = cacheKey(cityName, today, to);
       const cached = sessionStorage.getItem(key);
       if (cached) {
         try {
@@ -61,12 +73,20 @@ function ymd(d) {
         } catch {}
       }
 
+      const availabilityUrl = `${API.availability}?city=${encodeURIComponent(cityName)}&from=${today}&to=${to}`;
+
       try {
-        const avail = await getJSON(`${API.availability}?city=${encodeURIComponent(city.name)}&from=${today}&to=${to}`);
+        const avail = await getJSON(availabilityUrl);
         sessionStorage.setItem(key, JSON.stringify(avail));
         renderAvailability(avail, city, tz, open, out);
       } catch (e) {
-        out.textContent = JSON.stringify({ ok:false, error:e.message }, null, 2);
+        try {
+          const r = await fetch(`${availabilityUrl}&v=${Date.now()}`, { cache: 'no-store' });
+          const text = await r.text();
+          out.textContent = text;
+        } catch {
+          out.textContent = JSON.stringify({ ok:false, error:e.message }, null, 2);
+        }
         open.style.display = 'none';
       }
     });
@@ -78,10 +98,8 @@ function ymd(d) {
         return;
       }
 
-      // Build a short human list
       const lines = (data.times || []).slice(0,120).map(t => `• ${t.readable} (${t.slots} slot${t.slots>1?'s':''})`);
 
-      // Book Now — prefer city.url, else baseUrl
       if (city.url) {
         open.href = city.url;
         open.textContent = `Book ${city.label || city.name}`;
