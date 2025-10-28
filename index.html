@@ -141,14 +141,23 @@ const renderSlots = (times = []) => {
 const selectLocation = async (loc) => {
   selection = { ...loc, location: loc.key, label: loc.label };
   [...document.querySelectorAll('.pill')].forEach((pill) => {
-    pill.classList.toggle('active', pill.dataset.key === loc.key && pill.dataset.account === loc.account);
+    pill.classList.toggle(
+      'active',
+      pill.dataset.key === loc.key && pill.dataset.account === loc.account
+    );
   });
   const selectEl = $('locationSelect');
-  if (selectEl && selectEl.value !== loc.key) {
-    selectEl.value = loc.key;
+  if (selectEl) {
+    const value = `${loc.account}::${loc.key}`;
+    if (selectEl.value !== value) {
+      selectEl.value = value;
+    }
   }
   await resolveSetup();
   await loadMonth();
+  if (!$('fetch').disabled) {
+    $('fetch').click();
+  }
 };
 
 const buildLocationControls = async () => {
@@ -177,12 +186,14 @@ const buildLocationControls = async () => {
       placeholder.value = '';
       placeholder.textContent = 'Select a location';
       placeholder.disabled = true;
-      placeholder.selected = true;
       select.appendChild(placeholder);
 
       locationCache.forEach((loc) => {
         const option = document.createElement('option');
-        option.value = loc.key;
+        option.value = `${loc.account}::${loc.key}`;
+        option.dataset.account = loc.account;
+        option.dataset.key = loc.key;
+        option.dataset.type = loc.appointmentTypeId;
         option.textContent = loc.isConfigured
           ? loc.calendarCount
             ? `${loc.label} (${loc.calendarCount})`
@@ -194,6 +205,10 @@ const buildLocationControls = async () => {
           firstConfigured = loc;
         }
       });
+
+      if (firstConfigured) {
+        select.value = `${firstConfigured.account}::${firstConfigured.key}`;
+      }
     }
 
     locationCache.forEach((loc) => {
@@ -235,8 +250,13 @@ const buildLocationControls = async () => {
 };
 
 const handleLocationSelect = (event) => {
-  const selectedKey = event.target.value;
-  const match = locationCache.find((loc) => loc.key === selectedKey);
+  const option = event.target.selectedOptions[0];
+  if (!option) return;
+  const selectedKey = option.dataset.key;
+  const selectedAccount = option.dataset.account;
+  const match = locationCache.find(
+    (loc) => loc.key === selectedKey && loc.account === selectedAccount
+  );
   if (match && match.isConfigured) {
     selectLocation(match);
   }
