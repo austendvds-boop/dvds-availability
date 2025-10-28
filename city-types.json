@@ -1,0 +1,24 @@
+{
+  "main": {
+    "awatukee": "76043315",
+    "apache junction": "50528555",
+    "casa grande": "70526040",
+    "cave creek": "63747690",
+    "downtown phoenix": "50528736",
+    "gilbert": "44842749",
+    "mesa": "44842781",
+    "queen creek": "50528913",
+    "san tan valley": "50528924",
+    "scottsdale": "53640646",
+    "tempe": "50528939",
+    "chandler": "50528663"
+  },
+  "parents": {
+    "anthem": "50529545",
+    "glendale": "50529778",
+    "north phoenix": "80856319",
+    "peoria": "50529862",
+    "sun city": "50529915",
+    "surprise": "50529929"
+  }
+}
