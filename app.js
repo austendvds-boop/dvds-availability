@@ -1,131 +1,232 @@
 const API = {
   locations: '/api/locations',
-  availability: '/api/availability'
+  availability: '/api/availability',
+  env: '/api/env-check'
 };
 
-function cacheKey(city, from, to) {
-  return `avail:${city}:${from}:${to}`;
-}
+const state = {
+  cities: [],
+  city: null,
+  y: null,
+  m: null,
+  cache: new Map(),
+  env: null,
+  inFlight: null
+};
 
-async function getJSON(url) {
-  const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), { cache: 'no-store' });
-  if (!r.ok) {
-    let body = null;
-    try { body = await r.json(); } catch {}
-    const detail = body && body.detail;
-    const error = body && body.error;
-    const msg = (error || detail)
-      ? `${error || ''} ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`.trim()
+function ymd(d){ return new Date(d).toISOString().slice(0,10); }
+function firstOfMonth(y,m){ return `${y}-${String(m).padStart(2,'0')}-01`; }
+function lastOfMonth(y,m){ return ymd(new Date(y, m, 0)); }
+function labelOf(y,m){
+  return new Date(`${y}-${String(m).padStart(2,'0')}-01T00:00:00`).toLocaleString('en-US',{ month:'long', year:'numeric' });
+}
+function monthKey(city,y,m){ return `${city}|${y}-${String(m).padStart(2,'0')}`; }
+function sset(k,v){ try{ sessionStorage.setItem(k, JSON.stringify(v)); }catch{} }
+function sget(k){ try{ const t=sessionStorage.getItem(k); return t?JSON.parse(t):null; }catch{ return null; } }
+
+async function getJSON(url, signal){
+  const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), { cache:'no-store', signal });
+  if(!r.ok){
+    let body=null; try{ body=await r.json(); }catch{}
+    const msg = body && (body.detail || body.error)
+      ? `${body.error||''} ${typeof body.detail==='string'?body.detail:JSON.stringify(body.detail)}`.trim()
       : `HTTP ${r.status}`;
     throw new Error(msg);
   }
   return r.json();
 }
 
-function ymd(d) {
-  return new Date(d).toISOString().slice(0,10);
+function buildGrid(days, availByDate){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const head = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  head.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'dow';
+    el.textContent = d;
+    grid.appendChild(el);
+  });
+
+  const first = new Date(days[0] + 'T00:00:00');
+  let lead = first.getDay();
+  for(let i=0;i<lead;i++){
+    const pad=document.createElement('div');
+    pad.className='cell';
+    grid.appendChild(pad);
+  }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  days.forEach(dstr=>{
+    const d = new Date(dstr+'T00:00:00');
+    const el = document.createElement('div');
+    el.className = 'cell';
+    const dateEl = document.createElement('div');
+    dateEl.className = 'date';
+    dateEl.textContent = String(d.getDate());
+    el.appendChild(dateEl);
+
+    const list = availByDate.get(dstr) || [];
+    if(list.length){
+      const dot = document.createElement('div');
+      dot.className = 'has';
+      dot.textContent = `${list.length}×`;
+      el.appendChild(dot);
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => showTimes(dstr, list));
+    }
+
+    if(d < today){ el.classList.add('disabled'); }
+
+    grid.appendChild(el);
+  });
 }
 
-(async function main(){
+function showTimes(dateStr, list){
+  const times = document.getElementById('times');
+  const human = new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
+  const lines = list.map(t => `• ${t.readable} (${t.slots} slot${t.slots>1?'s':''})`);
+  times.textContent = [`Date: ${human}`, `Times:`, ...lines].join('\n');
+}
+
+async function loadMonth(y,m,{prefetch=true}={}){
+  const status = document.getElementById('status');
+  const label  = document.getElementById('monthlabel');
+  const grid   = document.getElementById('grid');
+  const times  = document.getElementById('times');
+
+  state.y=y; state.m=m;
+  label.textContent = labelOf(y,m);
+  grid.innerHTML = '';
+  for(let i=0;i<14;i++){ const sk=document.createElement('div'); sk.className='cell skeleton'; grid.appendChild(sk); }
+  times.textContent = '';
+
+  const from = firstOfMonth(y,m);
+  const to   = lastOfMonth(y,m);
+  const key  = monthKey(state.city.name, y, m);
+
+  const cached = state.cache.get(key) || sget(key);
+  if(cached){ drawMonth(cached); }
+
+  if(state.inFlight) state.inFlight.abort();
+  state.inFlight = new AbortController();
+
+  try{
+    const data = await getJSON(`${API.availability}?city=${encodeURIComponent(state.city.name)}&from=${from}&to=${to}`, state.inFlight.signal);
+    if(!data.ok) throw new Error(data.error || 'availability failed');
+    sset(key, data); state.cache.set(key, data);
+    drawMonth(data);
+    status.textContent = 'Ready';
+  }catch(e){
+    if(e.name === 'AbortError') return;
+    status.textContent = 'Error';
+    try {
+      const resp = await fetch(`${API.availability}?city=${encodeURIComponent(state.city.name)}&from=${from}&to=${to}`);
+      times.textContent = await resp.text();
+    } catch {
+      times.textContent = JSON.stringify({ ok:false, error:e.message }, null, 2);
+    }
+  }
+
+  if(prefetch){
+    const prevM = m===1 ? 12 : m-1, prevY = m===1 ? y-1 : y;
+    const nextM = m===12? 1  : m+1, nextY = m===12? y+1 : y;
+    prefetchMonth(prevY, prevM);
+    prefetchMonth(nextY, nextM);
+  }
+}
+
+async function prefetchMonth(y,m){
+  const key = monthKey(state.city.name, y, m);
+  if(state.cache.has(key) || sget(key)) return;
+  const from = firstOfMonth(y,m);
+  const to   = lastOfMonth(y,m);
+  try{
+    const data = await getJSON(`${API.availability}?city=${encodeURIComponent(state.city.name)}&from=${from}&to=${to}`);
+    if(data && data.ok){ sset(key,data); state.cache.set(key,data); }
+  }catch{}
+}
+
+function drawMonth(data){
+  const from = data.range.from;
+  const [yy,mm] = from.split('-').map(Number);
+  const end = lastOfMonth(yy,mm);
+  const days = [];
+  for(let d = new Date(from+'T00:00:00'); ymd(d) <= end; d.setDate(d.getDate()+1)){
+    days.push(ymd(d));
+  }
+  const by = new Map();
+  (data.times||[]).forEach(t => {
+    const day = t.time.slice(0,10);
+    if(!by.has(day)) by.set(day, []);
+    by.get(day).push(t);
+  });
+  buildGrid(days, by);
+}
+
+(async function boot(){
   const status = document.getElementById('status');
   const sel = document.getElementById('location');
-  const out = document.getElementById('out');
-  const open = document.getElementById('open');
+  const book = document.getElementById('book');
+  const times = document.getElementById('times');
+  const prev = document.getElementById('prev');
+  const next = document.getElementById('next');
 
-  try {
-    status.textContent = 'Loading…';
-    const data = await getJSON(API.locations);
-    if (!data.ok) throw new Error(data.error || 'locations failed');
+  try{
+    const [loc, env] = await Promise.all([
+      getJSON(API.locations),
+      getJSON(API.env).catch(()=>null)
+    ]);
 
-    const envInfo = await getJSON('/api/env-check').catch(() => ({ timezone: 'America/Phoenix', defaultDays: 14 }));
+    if(!loc.ok) throw new Error(loc.error || 'locations failed');
 
-    // Build dropdown
+    state.env = env;
+    state.cities = loc.cities;
     sel.innerHTML = '<option value="">Select a location…</option>' +
-      data.cities.map(c => `<option value="${encodeURIComponent(c.name)}">${c.label || c.name}</option>`).join('');
+      loc.cities.map(c => `<option value="${encodeURIComponent(c.name)}">${c.label || c.name}</option>`).join('');
     sel.disabled = false;
     status.textContent = 'Ready';
 
     sel.addEventListener('change', async () => {
       const name = decodeURIComponent(sel.value || '');
-      if (!name) return;
+      if(!name) return;
+      state.city = loc.cities.find(c => c.name === name || c.label === name) || loc.cities.find(c=>c.name===name);
 
-      const city = data.cities.find(c => c.name === name || c.label === name) || data.cities.find(c => c.name === name);
-      if (!city) return;
-
-      const tz = envInfo.timezone || 'America/Phoenix';
-      const fallbackDays = 14;
-      const defaultDays = Number(envInfo.defaultDays) || fallbackDays;
-      const today = ymd(Date.now());
-      const to = ymd(Date.now() + defaultDays * 86400000);
-      const cityName = city.name;
-
-      out.textContent = 'Fetching availability…';
-
-      const key = cacheKey(cityName, today, to);
-      const cached = sessionStorage.getItem(key);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          renderAvailability(parsed, city, tz, open, out);
-          return;
-        } catch {}
+      if(state.city?.url){
+        book.href = state.city.url;
+        book.textContent = `Book ${state.city.label||state.city.name}`;
+        book.style.display = 'inline-block';
+      } else if(state.city?.baseUrl){
+        book.href = state.city.baseUrl;
+        book.textContent = `Book ${state.city.label||state.city.name}`;
+        book.style.display = 'inline-block';
+      } else {
+        book.style.display = 'none';
       }
 
-      const availabilityUrl = `${API.availability}?city=${encodeURIComponent(cityName)}&from=${today}&to=${to}`;
-
-      try {
-        const avail = await getJSON(availabilityUrl);
-        sessionStorage.setItem(key, JSON.stringify(avail));
-        renderAvailability(avail, city, tz, open, out);
-      } catch (e) {
-        try {
-          const r = await fetch(`${API.availability}?city=${encodeURIComponent(cityName)}&from=${today}&to=${to}`);
-          out.textContent = await r.text();
-        } catch {
-          out.textContent = JSON.stringify({ ok:false, error:e.message }, null, 2);
-        }
-        open.style.display = 'none';
-      }
+      const today = new Date();
+      await loadMonth(today.getFullYear(), today.getMonth()+1);
     });
 
-    function renderAvailability(data, city, tz, open, out) {
-      if (!data.ok) {
-        out.textContent = JSON.stringify(data, null, 2);
-        open.style.display = 'none';
-        return;
-      }
-
-      const lines = (data.times || []).slice(0,120).map(t => `• ${t.readable} (${t.slots} slot${t.slots>1?'s':''})`);
-
-      if (city.url) {
-        open.href = city.url;
-        open.textContent = `Book ${city.label || city.name}`;
-        open.style.display = 'inline-block';
-      } else if (city.baseUrl) {
-        open.href = city.baseUrl;
-        open.textContent = `Book ${city.label || city.name}`;
-        open.style.display = 'inline-block';
-      } else {
-        open.style.display = 'none';
-      }
-
-      out.textContent = [
-        `City: ${city.label || city.name}`,
-        `Range: ${data.range.from} → ${data.range.to}`,
-        `Timezone: ${data.timezone || tz}`,
-        `Count: ${data.count}`,
-        '',
-        ...lines
-      ].join('\n');
-    }
-  } catch(e) {
+    prev.addEventListener('click', async ()=>{
+      if(!state.city) return;
+      const m = state.m===1 ? 12 : state.m-1;
+      const y = state.m===1 ? state.y-1 : state.y;
+      await loadMonth(y,m);
+    });
+    next.addEventListener('click', async ()=>{
+      if(!state.city) return;
+      const m = state.m===12 ? 1 : state.m+1;
+      const y = state.m===12 ? state.y+1 : state.y;
+      await loadMonth(y,m);
+    });
+  }catch(e){
     status.textContent = 'Error';
-    out.textContent = JSON.stringify({ ok:false, error:e.message, cities: [] }, null, 2);
+    times.textContent = JSON.stringify({ ok:false, error:e.message, cities:[] }, null, 2);
     sel.disabled = true;
   }
 })();
 
-// Safety net for any stale '/api/locations1' markup
 if (typeof window !== 'undefined' && /locations1\b/.test(document.documentElement.innerHTML)) {
   console.warn('Found stale /api/locations1 reference — should be /api/locations');
 }
