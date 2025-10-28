@@ -1,89 +1,95 @@
 {
   "studentLocations": {
     "Awatukee": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "76043315",
+      "owner": "23214568",
+      "appointmentType": "76043315",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=76043315"
     },
     "Apache Junction": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "50528555",
+      "owner": "23214568",
+      "appointmentType": "50528555",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=50528555"
     },
     "Casa Grande": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "70526040",
+      "owner": "23214568",
+      "appointmentType": "70526040",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=70526040"
     },
     "Cave Creek": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "63747690",
+      "owner": "23214568",
+      "appointmentType": "63747690",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=63747690"
     },
     "Downtown Phoenix": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "50528736",
+      "owner": "23214568",
+      "appointmentType": "50528736",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=50528736"
     },
     "Gilbert": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "44842749",
+      "owner": "23214568",
+      "appointmentType": "44842749",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=44842749"
     },
     "Mesa": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "44842781",
+      "owner": "23214568",
+      "appointmentType": "44842781",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=44842781"
     },
     "Queen Creek": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "50528913",
+      "owner": "23214568",
+      "appointmentType": "50528913",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=50528913"
     },
     "San Tan Valley": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "50528924",
+      "owner": "23214568",
+      "appointmentType": "50528924",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=50528924"
     },
     "Scottsdale": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "53640646",
+      "owner": "23214568",
+      "appointmentType": "53640646",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=53640646"
     },
     "Tempe": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "50528939",
+      "owner": "23214568",
+      "appointmentType": "50528939",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=50528939"
     },
     "Chandler": {
-      "ownerId": "23214568",
-      "appointmentTypeId": "50528663",
+      "owner": "23214568",
+      "appointmentType": "50528663",
       "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=50528663"
     }
   },
   "parentLocations": {
     "Anthem": {
-      "appointmentTypeId": "50529545",
+      "owner": "23214568",
+      "appointmentType": "50529545",
       "url": "https://DeerValleyDrivingSchool.as.me/?appointmentType=50529545"
     },
     "Glendale": {
-      "appointmentTypeId": "50529778",
+      "owner": "23214568",
+      "appointmentType": "50529778",
       "url": "https://DeerValleyDrivingSchool.as.me/?appointmentType=50529778"
     },
     "North Phoenix": {
-      "appointmentTypeId": "80856319",
+      "owner": "23214568",
+      "appointmentType": "80856319",
       "url": "https://DeerValleyDrivingSchool.as.me/?appointmentType=80856319"
     },
     "Peoria": {
-      "appointmentTypeId": "50529862",
+      "owner": "23214568",
+      "appointmentType": "50529862",
       "url": "https://DeerValleyDrivingSchool.as.me/?appointmentType=50529862"
     },
     "Sun City": {
-      "appointmentTypeId": "50529915",
+      "owner": "23214568",
+      "appointmentType": "50529915",
       "url": "https://DeerValleyDrivingSchool.as.me/?appointmentType=50529915"
     },
     "Surprise": {
-      "appointmentTypeId": "50529929",
+      "owner": "23214568",
+      "appointmentType": "50529929",
       "url": "https://DeerValleyDrivingSchool.as.me/?appointmentType=50529929"
     }
   }
