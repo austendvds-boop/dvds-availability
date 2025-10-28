@@ -5,28 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>DVDS Availability</title>
 <style>
-  :root{ --ink:#0b1320; --muted:#64748b; --ring:#e2e8f0; --brand:#34b16a; }
+  :root{ --ink:#0b1320; --muted:#64748b; --ring:#e2e8f0; --brand:#34b16a; --bg:#f8fafc; }
   body{ font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto; color:var(--ink); margin:24px; }
-  h1{ font-size: 2.2rem; margin:0 0 8px; }
+  h1{ font-size: 2rem; margin:0 0 8px; }
   .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
   select{ padding:10px 12px; border:1px solid var(--ring); border-radius:8px; font-size:1rem; }
   #book{ display:none; margin-left:auto; text-decoration:none; padding:10px 14px; border-radius:10px; background:var(--brand); color:white; }
-  #status{ font-weight:700; margin:12px 0; }
+  #status{ font-weight:700; margin:8px 0; }
   .calwrap{ margin-top:16px; border:1px solid var(--ring); border-radius:14px; overflow:hidden; }
-  .calhdr{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#f8fafc; border-bottom:1px solid var(--ring); }
+  .calhdr{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--bg); border-bottom:1px solid var(--ring); }
+  .navgroup{ display:flex; gap:8px; }
   .navbtn{ border:1px solid var(--ring); background:white; border-radius:10px; padding:6px 10px; cursor:pointer; }
   .navbtn:disabled{ opacity:.4; cursor:not-allowed; }
   .grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:var(--ring); }
-  .dow,.cell{ background:white; padding:10px; min-height:64px; }
+  .dow,.cell{ background:white; padding:12px; min-height:72px; }
   .dow{ font-size:.8rem; color:var(--muted); text-align:center; background:#f1f5f9; }
   .cell{ position:relative; }
-  .date{ font-size:.9rem; color:var(--muted); }
-  .has{ position:absolute; right:8px; bottom:8px; font-size:.75rem; color:#16a34a; }
+  .date{ font-size:.95rem; color:var(--muted); }
+  .has{ position:absolute; right:10px; bottom:8px; font-size:.75rem; color:#16a34a; }
   .muted{ color:#cbd5e1; }
   .disabled{ color:#cbd5e1; pointer-events:none; }
+  .cell.clickable{ cursor:pointer; }
   .skeleton{ background:linear-gradient(90deg,#f8fafc,#eef2f7,#f8fafc); background-size:200% 100%; animation:sh 1.2s infinite; }
   @keyframes sh{ 0%{background-position:0% 0;} 100%{background-position:200% 0;} }
-  #times{ margin-top:16px; border:1px dashed var(--ring); padding:12px; border-radius:12px; white-space:pre-wrap; }
+  #times{ margin-top:16px; border:1px dashed var(--ring); padding:16px; border-radius:12px; }
+  .pill{ display:inline-block; padding:10px 14px; border:1px solid var(--ring); border-radius:12px; margin:6px 8px 0 0; background:white; }
 </style>
 </head>
 <body>
@@ -43,14 +46,16 @@
 
   <div class="calwrap" id="cal" aria-live="polite">
     <div class="calhdr">
-      <button id="prev" class="navbtn" aria-label="Previous Month">◀</button>
+      <div class="navgroup">
+        <button id="prev" class="navbtn" aria-label="Previous Month">◀</button>
+        <button id="next" class="navbtn" aria-label="Next Month">▶</button>
+      </div>
       <div id="monthlabel">—</div>
-      <button id="next" class="navbtn" aria-label="Next Month">▶</button>
     </div>
     <div class="grid" id="grid"></div>
   </div>
 
-  <pre id="times"></pre>
+  <div id="times"></div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

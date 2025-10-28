@@ -4,6 +4,8 @@ const API = {
   env: '/api/env-check'
 };
 
+const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
 const state = {
   cities: [],
   city: null,
@@ -19,6 +21,11 @@ function firstOfMonth(y,m){ return `${y}-${String(m).padStart(2,'0')}-01`; }
 function lastOfMonth(y,m){ return ymd(new Date(y, m, 0)); }
 function labelOf(y,m){
   return new Date(`${y}-${String(m).padStart(2,'0')}-01T00:00:00`).toLocaleString('en-US',{ month:'long', year:'numeric' });
+}
+function startDowMonday(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const dow = d.getDay();
+  return (dow + 6) % 7;
 }
 function monthKey(city,y,m){ return `${city}|${y}-${String(m).padStart(2,'0')}`; }
 function sset(k,v){ try{ sessionStorage.setItem(k, JSON.stringify(v)); }catch{} }
@@ -39,23 +46,21 @@ async function getJSON(url, signal){
 function buildGrid(days, availByDate){
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
-  const head = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  head.forEach(d => {
+  DOW.forEach(d => {
     const el = document.createElement('div');
     el.className = 'dow';
     el.textContent = d;
     grid.appendChild(el);
   });
 
-  const first = new Date(days[0] + 'T00:00:00');
-  let lead = first.getDay();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const firstDay = days[0];
+  let lead = startDowMonday(firstDay);
   for(let i=0;i<lead;i++){
     const pad=document.createElement('div');
     pad.className='cell';
     grid.appendChild(pad);
   }
-
-  const today = new Date(); today.setHours(0,0,0,0);
 
   days.forEach(dstr=>{
     const d = new Date(dstr+'T00:00:00');
@@ -66,17 +71,20 @@ function buildGrid(days, availByDate){
     dateEl.textContent = String(d.getDate());
     el.appendChild(dateEl);
 
-    const list = availByDate.get(dstr) || [];
-    if(list.length){
+    const isPast = d < today;
+    const list = isPast ? [] : (availByDate.get(dstr) || []);
+
+    if(isPast){
+      el.classList.add('disabled');
+      dateEl.classList.add('muted');
+    } else if(list.length){
       const dot = document.createElement('div');
       dot.className = 'has';
       dot.textContent = `${list.length}×`;
       el.appendChild(dot);
-      el.style.cursor = 'pointer';
+      el.classList.add('clickable');
       el.addEventListener('click', () => showTimes(dstr, list));
     }
-
-    if(d < today){ el.classList.add('disabled'); }
 
     grid.appendChild(el);
   });
@@ -85,8 +93,16 @@ function buildGrid(days, availByDate){
 function showTimes(dateStr, list){
   const times = document.getElementById('times');
   const human = new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
-  const lines = list.map(t => `• ${t.readable} (${t.slots} slot${t.slots>1?'s':''})`);
-  times.textContent = [`Date: ${human}`, `Times:`, ...lines].join('\n');
+  let html = `<b>${human}</b><div style="margin-top:8px">`;
+  if(!list.length){
+    html += `<div class="muted">No times</div>`;
+  } else {
+    for(const t of list){
+      html += `<span class="pill">${t.readable.replace(':00 ', ' ')}</span>`;
+    }
+  }
+  html += `</div>`;
+  times.innerHTML = html;
 }
 
 async function loadMonth(y,m,{prefetch=true}={}){
@@ -99,7 +115,7 @@ async function loadMonth(y,m,{prefetch=true}={}){
   label.textContent = labelOf(y,m);
   grid.innerHTML = '';
   for(let i=0;i<14;i++){ const sk=document.createElement('div'); sk.className='cell skeleton'; grid.appendChild(sk); }
-  times.textContent = '';
+  times.innerHTML = '';
 
   const from = firstOfMonth(y,m);
   const to   = lastOfMonth(y,m);

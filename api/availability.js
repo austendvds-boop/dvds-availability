@@ -33,6 +33,49 @@ async function acuityJSON(url, auth) {
   return { resp, json, text };
 }
 
+// concurrency helper
+async function mapLimit(items, limit, iter) {
+  const ret = [];
+  let i = 0, active = 0;
+  return await new Promise((resolve, reject) => {
+    const kick = () => {
+      if (i === items.length && active === 0) return resolve(ret);
+      while (active < limit && i < items.length) {
+        const idx = i++, val = items[idx];
+        active++;
+        Promise.resolve()
+          .then(() => iter(val, idx))
+          .then(r => { ret[idx] = r; active--; kick(); })
+          .catch(err => { reject(err); });
+      }
+    };
+    kick();
+  });
+}
+
+async function perDayAggregate(dates, tz, apptType, cfg, auth, urlFor) {
+  const results = await mapLimit(dates, 6, async (day) => {
+    const params = { appointmentTypeID: String(apptType), timezone: tz, date: day };
+    const { resp, json, text } = await acuityJSON(urlFor("times", params), auth);
+    if (!resp.ok) return { _error: true, day, status: resp.status, detail: json || text };
+    const arr = Array.isArray(json) ? json : [];
+    return arr.map(t => ({
+      time: t.time,
+      slots: t.slots ?? 1,
+      readable: new Date(t.time).toLocaleString("en-US", { timeZone: tz })
+    }));
+  });
+
+  const times = [];
+  const errors = [];
+  for (const r of results) {
+    if (!r) continue;
+    if (Array.isArray(r)) times.push(...r);
+    else if (r._error) errors.push(r);
+  }
+  return { times, errors };
+}
+
 module.exports = async (req, res) => {
   try {
     const url = new URL(req.url, "http://localhost");
@@ -82,6 +125,7 @@ module.exports = async (req, res) => {
         slots: t.slots ?? 1,
         readable: new Date(t.time).toLocaleString("en-US", { timeZone: tz })
       }));
+      try { res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60'); } catch {}
       return res.status(200).json({ ok:true, city, account: cfg.account || "main", appointmentType: apptType,
         calendarId: cfg.calendarId ?? null, timezone: tz, range: { from: start, to: end }, count: times.length, times });
     }
@@ -92,26 +136,10 @@ module.exports = async (req, res) => {
     }
 
     const days = datesBetween(start, end);
-    const all = [];
-    for (const day of days) {
-      const params = { appointmentTypeID: String(apptType), timezone: tz, date: day };
-      const { resp, json, text } = await acuityJSON(urlFor("times", params), auth);
-      if (!resp.ok) {
-        all.push({ _error: true, day, status: resp.status, detail: json || text });
-        continue;
-      }
-      if (Array.isArray(json)) {
-        for (const t of json) {
-          all.push({
-            time: t.time,
-            slots: t.slots ?? 1,
-            readable: new Date(t.time).toLocaleString("en-US", { timeZone: tz })
-          });
-        }
-      }
-    }
+    const { times, errors } = await perDayAggregate(days, tz, apptType, cfg, auth, urlFor);
 
-    const times = all.filter(x => !x._error);
+    try { res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60'); } catch {}
+
     return res.status(200).json({
       ok: true,
       city,
@@ -122,7 +150,7 @@ module.exports = async (req, res) => {
       range: { from: start, to: end },
       count: times.length,
       times,
-      errors: all.filter(x => x._error)
+      errors
     });
   } catch (err) {
     res.status(500).json({ ok:false, error: err.message });
