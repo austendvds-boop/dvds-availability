@@ -1,34 +1,37 @@
-const { loadCityTypes, getLocationsByAccount } = require('./_acuity');
+const { loadCityTypes, loadLocationConfig } = require('./_acuity');
 
-function toLabel(key) {
-  return key.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const toLabel = (key) => key.replace(/\b\w/g, (c) => c.toUpperCase());
 
 module.exports = (_req, res) => {
   try {
     const types = loadCityTypes() || {};
-    const locations = getLocationsByAccount();
-    const payload = {};
+    const config = loadLocationConfig() || {};
+    const accounts = {};
+    const accountKeys = new Set([...Object.keys(types), ...Object.keys(config)]);
 
-    for (const account of Object.keys(types)) {
+    for (const account of accountKeys) {
       const typeMap = types[account] || {};
-      const accountLocations = locations[account] || {};
-      const normalized = {};
+      const configMap = config[account] || {};
+      const locationKeys = new Set([...Object.keys(typeMap), ...Object.keys(configMap)]);
+      const locations = {};
 
-      for (const key of Object.keys(typeMap)) {
-        const info = accountLocations[key] || { appointmentTypeId: String(typeMap[key] || ''), locationIds: [] };
-        normalized[toLabel(key)] = {
-          appointmentTypeId: String(typeMap[key]),
-          locationIds: info.locationIds || [],
-          isConfigured: Boolean(info.locationIds && info.locationIds.length > 0),
+      for (const key of locationKeys) {
+        const appointmentTypeId = typeMap[key] != null ? String(typeMap[key]) : null;
+        const configuredIds = Array.isArray(configMap[key]) ? configMap[key] : [];
+        const normalizedIds = configuredIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+
+        locations[toLabel(key)] = {
+          appointmentTypeId,
+          locationIds: normalizedIds,
+          isConfigured: normalizedIds.length > 0,
         };
       }
 
-      payload[account] = normalized;
+      accounts[account] = locations;
     }
 
-    res.status(200).json({ ok: true, accounts: payload });
+    res.status(200).json({ ok: true, accounts });
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message || 'Failed to load availability' });
+    res.status(500).json({ ok: false, error: error?.message || 'failed' });
   }
 };
