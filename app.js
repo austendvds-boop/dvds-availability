@@ -16,6 +16,8 @@ const state = {
   inFlight: null
 };
 
+const ui = { selectedDay: null };
+
 function ymd(d){ return new Date(d).toISOString().slice(0,10); }
 function firstOfMonth(y,m){ return `${y}-${String(m).padStart(2,'0')}-01`; }
 function lastOfMonth(y,m){ return ymd(new Date(y, m, 0)); }
@@ -24,8 +26,7 @@ function labelOf(y,m){
 }
 function startDowMonday(dateStr){
   const d = new Date(dateStr+'T00:00:00');
-  const dow = d.getDay();
-  return (dow + 6) % 7;
+  return (d.getDay() + 6) % 7;
 }
 function monthKey(city,y,m){ return `${city}|${y}-${String(m).padStart(2,'0')}`; }
 function sset(k,v){ try{ sessionStorage.setItem(k, JSON.stringify(v)); }catch{} }
@@ -54,12 +55,11 @@ function buildGrid(days, availByDate){
   });
 
   const today = new Date(); today.setHours(0,0,0,0);
-  const firstDay = days[0];
-  let lead = startDowMonday(firstDay);
+  const todayYMD = ymd(today);
+
+  let lead = startDowMonday(days[0]);
   for(let i=0;i<lead;i++){
-    const pad=document.createElement('div');
-    pad.className='cell';
-    grid.appendChild(pad);
+    const pad=document.createElement('div'); pad.className='cell'; grid.appendChild(pad);
   }
 
   days.forEach(dstr=>{
@@ -67,42 +67,89 @@ function buildGrid(days, availByDate){
     const el = document.createElement('div');
     el.className = 'cell';
     const dateEl = document.createElement('div');
-    dateEl.className = 'date';
+    dateEl.className='date';
     dateEl.textContent = String(d.getDate());
     el.appendChild(dateEl);
 
     const isPast = d < today;
-    const list = isPast ? [] : (availByDate.get(dstr) || []);
+    const list = availByDate.get(dstr) || [];
+    const isEmptyFuture = !isPast && list.length === 0;
+
+    if(dstr === todayYMD){
+      el.classList.add('today');
+    }
 
     if(isPast){
-      el.classList.add('disabled');
-      dateEl.classList.add('muted');
+      el.classList.add('past','disabled');
+    } else if(isEmptyFuture){
+      el.classList.add('empty');
     } else if(list.length){
+      el.classList.add('clickable');
       const dot = document.createElement('div');
-      dot.className = 'has';
+      dot.className='badge';
       dot.textContent = `${list.length}×`;
       el.appendChild(dot);
-      el.classList.add('clickable');
-      el.addEventListener('click', () => showTimes(dstr, list));
+      el.addEventListener('click', () => {
+        ui.selectedDay = dstr;
+        highlightActive(grid);
+        showTimes(dstr, list);
+      });
+    }
+
+    if(ui.selectedDay === dstr){
+      el.classList.add('active');
     }
 
     grid.appendChild(el);
   });
+
+  highlightActive(grid);
+}
+
+function highlightActive(grid){
+  grid.querySelectorAll('.cell.active').forEach(node => node.classList.remove('active'));
+  if(!ui.selectedDay) return;
+  const cells = Array.from(grid.querySelectorAll('.cell'));
+  const targetDay = new Date(ui.selectedDay+'T00:00:00').getDate();
+  for(const cell of cells){
+    if(cell.classList.contains('past') || cell.classList.contains('empty')) continue;
+    const num = cell.querySelector('.date')?.textContent?.trim();
+    if(num && Number(num) === targetDay){
+      cell.classList.add('active');
+      break;
+    }
+  }
 }
 
 function showTimes(dateStr, list){
+  const title = document.getElementById('paneltitle');
   const times = document.getElementById('times');
   const human = new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
-  let html = `<b>${human}</b><div style="margin-top:8px">`;
+  title.textContent = human;
+
   if(!list.length){
-    html += `<div class="muted">No times</div>`;
-  } else {
-    for(const t of list){
-      html += `<span class="pill">${t.readable.replace(':00 ', ' ')}</span>`;
-    }
+    times.innerHTML = '<div class="emptymsg">No times available.</div>';
+    return;
   }
-  html += `</div>`;
-  times.innerHTML = html;
+
+  times.innerHTML = list.map(t => `<span class="pill">${t.readable.replace(':00 ', ' ')}</span>`).join('');
+}
+
+function drawMonth(data){
+  const from = data.range.from;
+  const [yy,mm] = from.split('-').map(Number);
+  const end = lastOfMonth(yy,mm);
+  const days = [];
+  for(let d = new Date(from+'T00:00:00'); ymd(d) <= end; d.setDate(d.getDate()+1)){
+    days.push(ymd(d));
+  }
+  const by = new Map();
+  (data.times||[]).forEach(t => {
+    const day = t.time.slice(0,10);
+    if(!by.has(day)) by.set(day, []);
+    by.get(day).push(t);
+  });
+  buildGrid(days, by);
 }
 
 async function loadMonth(y,m,{prefetch=true}={}){
@@ -110,19 +157,24 @@ async function loadMonth(y,m,{prefetch=true}={}){
   const label  = document.getElementById('monthlabel');
   const grid   = document.getElementById('grid');
   const times  = document.getElementById('times');
+  const title  = document.getElementById('paneltitle');
 
   state.y=y; state.m=m;
+  ui.selectedDay = null;
   label.textContent = labelOf(y,m);
   grid.innerHTML = '';
   for(let i=0;i<14;i++){ const sk=document.createElement('div'); sk.className='cell skeleton'; grid.appendChild(sk); }
-  times.innerHTML = '';
+  times.innerHTML = '<div class="emptymsg">Select a day to view available times.</div>';
+  title.textContent = 'Select a day';
 
   const from = firstOfMonth(y,m);
   const to   = lastOfMonth(y,m);
   const key  = monthKey(state.city.name, y, m);
 
   const cached = state.cache.get(key) || sget(key);
-  if(cached){ drawMonth(cached); }
+  if(cached){
+    drawMonth(cached);
+  }
 
   if(state.inFlight) state.inFlight.abort();
   state.inFlight = new AbortController();
@@ -163,27 +215,11 @@ async function prefetchMonth(y,m){
   }catch{}
 }
 
-function drawMonth(data){
-  const from = data.range.from;
-  const [yy,mm] = from.split('-').map(Number);
-  const end = lastOfMonth(yy,mm);
-  const days = [];
-  for(let d = new Date(from+'T00:00:00'); ymd(d) <= end; d.setDate(d.getDate()+1)){
-    days.push(ymd(d));
-  }
-  const by = new Map();
-  (data.times||[]).forEach(t => {
-    const day = t.time.slice(0,10);
-    if(!by.has(day)) by.set(day, []);
-    by.get(day).push(t);
-  });
-  buildGrid(days, by);
-}
-
 (async function boot(){
   const status = document.getElementById('status');
   const sel = document.getElementById('location');
   const book = document.getElementById('book');
+  const book2 = document.getElementById('book2');
   const times = document.getElementById('times');
   const prev = document.getElementById('prev');
   const next = document.getElementById('next');
@@ -210,14 +246,21 @@ function drawMonth(data){
 
       if(state.city?.url){
         book.href = state.city.url;
+        book2.href = state.city.url;
         book.textContent = `Book ${state.city.label||state.city.name}`;
+        book2.textContent = `Book ${state.city.label||state.city.name}`;
         book.style.display = 'inline-block';
+        book2.style.display = 'inline-block';
       } else if(state.city?.baseUrl){
         book.href = state.city.baseUrl;
+        book2.href = state.city.baseUrl;
         book.textContent = `Book ${state.city.label||state.city.name}`;
+        book2.textContent = `Book ${state.city.label||state.city.name}`;
         book.style.display = 'inline-block';
+        book2.style.display = 'inline-block';
       } else {
         book.style.display = 'none';
+        book2.style.display = 'none';
       }
 
       const today = new Date();
