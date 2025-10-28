@@ -21,51 +21,55 @@ function loadLocationConfig() {
   return _locCfg;
 }
 
-function getTypeById(id) {
-  const types = loadCityTypes();
-  return types[id] || null;
+function getAccountKeys() {
+  const types = loadCityTypes() || {};
+  const cfg = loadLocationConfig() || {};
+  return Array.from(new Set([...Object.keys(types), ...Object.keys(cfg)]));
 }
 
-function getLocations() {
-  const cfg = loadLocationConfig();
-  if (!cfg || !Array.isArray(cfg.locations)) return [];
-  return cfg.locations;
+function getLocationEntries() {
+  const types = loadCityTypes() || {};
+  const cfg = loadLocationConfig() || {};
+  const accounts = getAccountKeys();
+  const entries = [];
+
+  for (const account of accounts) {
+    const typeMap = types[account] || {};
+    const configMap = cfg[account] || {};
+    const keys = new Set([...Object.keys(typeMap), ...Object.keys(configMap)]);
+
+    for (const key of keys) {
+      const appointmentTypeId = typeMap[key];
+      const configuredIds = Array.isArray(configMap[key]) ? configMap[key] : [];
+      entries.push({
+        account,
+        key,
+        appointmentTypeId: appointmentTypeId != null ? String(appointmentTypeId) : null,
+        locationIds: configuredIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0),
+      });
+    }
+  }
+
+  return entries;
 }
 
-function getLocationByKey(key) {
-  return getLocations().find((loc) => loc.key === key) || null;
-}
-
-function buildSchedulingUrl(acuity) {
-  if (!acuity || !acuity.appointmentType) return null;
-  const baseUrl = acuity.baseUrl || 'https://app.acuityscheduling.com/schedule.php';
-  const url = new URL(baseUrl);
-  if (acuity.owner) url.searchParams.set('owner', acuity.owner);
-  url.searchParams.set('appointmentType', acuity.appointmentType);
-  return url.toString();
-}
-
-function isLocationConfigured(loc) {
-  return Boolean(buildSchedulingUrl(loc && loc.acuity));
-}
-
-function toAcuityMetadata(loc) {
-  const acuity = loc ? loc.acuity : null;
-  const url = buildSchedulingUrl(acuity);
-  return {
-    owner: acuity && acuity.owner ? acuity.owner : null,
-    appointmentType: acuity && acuity.appointmentType ? acuity.appointmentType : null,
-    url,
-  };
+function getLocationsByAccount() {
+  return getLocationEntries().reduce((acc, entry) => {
+    if (!acc[entry.account]) {
+      acc[entry.account] = {};
+    }
+    acc[entry.account][entry.key] = {
+      appointmentTypeId: entry.appointmentTypeId,
+      locationIds: entry.locationIds,
+      isConfigured: entry.locationIds.length > 0,
+    };
+    return acc;
+  }, {});
 }
 
 module.exports = {
   loadCityTypes,
   loadLocationConfig,
-  getTypeById,
-  getLocations,
-  getLocationByKey,
-  buildSchedulingUrl,
-  isLocationConfigured,
-  toAcuityMetadata,
+  getLocationEntries,
+  getLocationsByAccount,
 };

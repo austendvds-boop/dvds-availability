@@ -1,19 +1,44 @@
-const { loadCityTypes, getLocations, buildSchedulingUrl, isLocationConfigured } = require('./_acuity');
+const { loadCityTypes, loadLocationConfig } = require('./_acuity');
 
-module.exports = (_req, res) => {
-  const types = loadCityTypes();
-  const locations = getLocations().map((loc) => {
-    const schedulingUrl = buildSchedulingUrl(loc.acuity);
-    const type = types[loc.type] || null;
-    return {
-      key: loc.key,
-      label: loc.label,
-      type: loc.type,
-      typeLabel: type ? type.label : null,
-      isConfigured: isLocationConfigured(loc),
-      schedulingUrl,
-    };
-  });
+function toLabel(key) {
+  return key.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-  res.status(200).json({ ok: true, locations });
+module.exports = async (_req, res) => {
+  try {
+    const types = loadCityTypes();
+    const cfg = loadLocationConfig();
+    const out = [];
+
+    for (const account of ['main', 'parents']) {
+      const typeMap = types[account] || {};
+      const configMap = cfg[account] || {};
+
+      for (const key of Object.keys(typeMap)) {
+        const configuredIds = Array.isArray(configMap[key]) ? configMap[key] : [];
+        const normalizedIds = configuredIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id) && id > 0);
+
+        out.push({
+          key,
+          label: toLabel(key),
+          account,
+          appointmentTypeId: String(typeMap[key]),
+          isConfigured: normalizedIds.length > 0,
+        });
+      }
+    }
+
+    out.sort((a, b) => {
+      if (a.isConfigured !== b.isConfigured) {
+        return a.isConfigured ? -1 : 1;
+      }
+      return a.label.localeCompare(b.label);
+    });
+
+    res.status(200).json({ ok: true, locations: out });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message || 'Failed to load locations' });
+  }
 };
