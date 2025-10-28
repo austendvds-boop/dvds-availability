@@ -1,70 +1,90 @@
-const cityTypes = require('../city-types.json');
-const locationConfig = require('../location-config.json');
+const fetch = global.fetch;
 
-const toTitleCase = (slug) =>
-  slug
-    .split('-')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-const buildSchedulingUrl = (config, appointmentType) => {
-  if (!config) return null;
-  if (config.url) return config.url;
-  const baseUrl = config.baseUrl;
-  if (!baseUrl) return null;
-
+module.exports = async (req, res) => {
   try {
-    const target = new URL(baseUrl);
-    if (config.owner != null) {
-      target.searchParams.set('owner', String(config.owner));
+    const url = new URL(req.url, 'http://localhost');
+    const city = url.searchParams.get('city');
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+
+    if (!city) {
+      return res.status(400).json({ ok: false, error: 'Missing ?city' });
     }
-    if (appointmentType) {
-      target.searchParams.set('appointmentType', String(appointmentType));
+
+    const types = require('../city-types.json');
+    const locs = require('../location-config.json');
+    const apptType = types[city];
+
+    if (!apptType) {
+      return res
+        .status(404)
+        .json({ ok: false, error: `Unknown city or missing appointmentType for "${city}"` });
     }
-    return target.toString();
-  } catch (_err) {
-    return null;
-  }
-};
 
-module.exports = (_req, res) => {
-  try {
-    const keys = Array.from(
-      new Set([
-        ...Object.keys(cityTypes || {}),
-        ...Object.keys(locationConfig || {}),
-      ])
-    );
+    const ACUITY_USER_ID = process.env.ACUITY_USER_ID;
+    const ACUITY_API_KEY = process.env.ACUITY_API_KEY;
+    const ACUITY_TZ = process.env.ACUITY_TIMEZONE || 'America/Phoenix';
 
-    const accounts = {};
+    if (!ACUITY_USER_ID || !ACUITY_API_KEY) {
+      return res
+        .status(500)
+        .json({ ok: false, error: 'Missing ACUITY_USER_ID / ACUITY_API_KEY env vars' });
+    }
 
-    keys.forEach((key) => {
-      const config = locationConfig[key] || {};
-      const label = config.label || toTitleCase(key);
-      const appointmentType = cityTypes[key] != null ? String(cityTypes[key]) : null;
-      const accountKey = config.account || 'unassigned';
-      const owner = config.owner != null ? String(config.owner) : null;
-      const baseUrl = config.baseUrl || null;
-      const url = buildSchedulingUrl(config, appointmentType);
+    const ymd = (d) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    const start = from || ymd(today);
+    const end = to || ymd(new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000));
 
-      if (!accounts[accountKey]) {
-        accounts[accountKey] = {};
-      }
+    const cityCfg = (locs && locs[city]) || {};
+    const calendarId = cityCfg.calendarId || undefined;
 
-      accounts[accountKey][label] = {
-        key,
-        appointmentType,
-        owner,
-        baseUrl,
-        url,
-      };
+    const qs = new URLSearchParams({
+      appointmentTypeID: String(apptType),
+      timezone: ACUITY_TZ,
+      from: start,
+      to: end,
     });
 
-    res.setHeader('Content-Type', 'application/json');
-    res.status(200).end(JSON.stringify({ ok: true, accounts }));
-  } catch (error) {
-    res.status(500).end(
-      JSON.stringify({ ok: false, error: error?.message || 'Failed to build availability map' })
-    );
+    if (calendarId) {
+      qs.set('calendarID', String(calendarId));
+    }
+
+    const acuityURL = `https://acuityscheduling.com/api/v1/availability/times?${qs.toString()}`;
+    const auth = Buffer.from(`${ACUITY_USER_ID}:${ACUITY_API_KEY}`).toString('base64');
+
+    const resp = await fetch(acuityURL, {
+      headers: { Authorization: `Basic ${auth}` },
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      return res
+        .status(resp.status)
+        .json({ ok: false, error: `Acuity ${resp.status}`, detail: text.slice(0, 500) });
+    }
+
+    const data = await resp.json();
+    const ACUITY_TZ_FORMAT = ACUITY_TZ;
+    const times = Array.isArray(data)
+      ? data.map((t) => ({
+          time: t.time,
+          slots: t.slots ?? 1,
+          readable: new Date(t.time).toLocaleString('en-US', { timeZone: ACUITY_TZ_FORMAT }),
+        }))
+      : [];
+
+    res.status(200).json({
+      ok: true,
+      city,
+      appointmentType: apptType,
+      calendarId: calendarId ?? null,
+      timezone: ACUITY_TZ,
+      range: { from: start, to: end },
+      count: times.length,
+      times,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 };
