@@ -1,0 +1,15 @@
+name: Repo Audit
+on: [push, pull_request]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node -e "try{require('./api/ok.js');console.log('ok.js ✅')}catch(e){process.exit(1)}"
+      - run: node -e "try{require('./api/locations.js');console.log('locations.js ✅')}catch(e){process.exit(1)}"
+      - run: node -e "try{require('./api/availability.js');console.log('availability.js ✅')}catch(e){process.exit(1)}"
+      - run: node -e "try{require('./api/debug-files.js');console.log('debug-files.js ✅')}catch(e){process.exit(1)}"
+      - run: node -e "try{require('./city-types.json');require('./location-config.json');console.log('JSON ✅')}catch(e){process.exit(1)}"

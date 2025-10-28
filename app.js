@@ -1,13 +1,20 @@
-if (typeof window !== 'undefined' && /locations1\b/.test(document.documentElement.innerHTML)) {
-  console.warn('Found stale /api/locations1 reference — should be /api/locations');
-}
+const API = {
+  locations: '/api/locations',
+  availability: '/api/availability'
+};
 
-const API = { locations: '/api/locations' };
+function cacheKey(city, from, to) {
+  return `avail:${city}:${from}:${to}`;
+}
 
 async function getJSON(url) {
   const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), { cache: 'no-store' });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
+}
+
+function ymd(d) {
+  return new Date(d).toISOString().slice(0,10);
 }
 
 (async function main(){
@@ -21,27 +28,89 @@ async function getJSON(url) {
     const data = await getJSON(API.locations);
     if (!data.ok) throw new Error(data.error || 'locations failed');
 
+    // Build dropdown
     sel.innerHTML = '<option value="">Select a location…</option>' +
-      data.cities.map(c => `<option value="${encodeURIComponent(c.name)}">${c.name}</option>`).join('');
+      data.cities.map(c => `<option value="${encodeURIComponent(c.name)}">${c.label || c.name}</option>`).join('');
     sel.disabled = false;
     status.textContent = 'Ready';
 
     sel.addEventListener('change', async () => {
       const name = decodeURIComponent(sel.value || '');
-      const city = data.cities.find(c => c.name === name);
-      if (!city) return;
-      out.textContent = JSON.stringify(city, null, 2);
+      if (!name) return;
+
+      // find selected city record
+      const city = data.cities.find(c => c.name === name || c.label === name) || data.cities.find(c=>c.name===name);
+      const tz = (await getJSON('/api/env-check').catch(()=>({timezone:'America/Phoenix'}))).timezone || 'America/Phoenix';
+
+      // date range (today -> +ACUITY_DEFAULT_DAYS or 14 fallback)
+      const today = ymd(Date.now());
+      const fallbackDays = 14;
+      const defaultDays = Number((window.DEFAULT_DAYS)||fallbackDays);
+      const to = ymd(Date.now() + defaultDays*86400000);
+
+      out.textContent = 'Fetching availability…';
+
+      // session cache
+      const key = cacheKey(city.name, today, to);
+      const cached = sessionStorage.getItem(key);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          renderAvailability(parsed, city, tz, open, out);
+          return;
+        } catch {}
+      }
+
+      try {
+        const avail = await getJSON(`${API.availability}?city=${encodeURIComponent(city.name)}&from=${today}&to=${to}`);
+        sessionStorage.setItem(key, JSON.stringify(avail));
+        renderAvailability(avail, city, tz, open, out);
+      } catch (e) {
+        out.textContent = JSON.stringify({ ok:false, error:e.message }, null, 2);
+        open.style.display = 'none';
+      }
+    });
+
+    function renderAvailability(data, city, tz, open, out) {
+      if (!data.ok) {
+        out.textContent = JSON.stringify(data, null, 2);
+        open.style.display = 'none';
+        return;
+      }
+
+      // Build a short human list
+      const lines = (data.times || []).slice(0,120).map(t => `• ${t.readable} (${t.slots} slot${t.slots>1?'s':''})`);
+
+      // Book Now — prefer city.url, else baseUrl
       if (city.url) {
         open.href = city.url;
-        open.textContent = `Open ${city.name} calendar`;
+        open.textContent = `Book ${city.label || city.name}`;
+        open.style.display = 'inline-block';
+      } else if (city.baseUrl) {
+        open.href = city.baseUrl;
+        open.textContent = `Book ${city.label || city.name}`;
         open.style.display = 'inline-block';
       } else {
         open.style.display = 'none';
       }
-    });
+
+      out.textContent = [
+        `City: ${city.label || city.name}`,
+        `Range: ${data.range.from} → ${data.range.to}`,
+        `Timezone: ${data.timezone || tz}`,
+        `Count: ${data.count}`,
+        '',
+        ...lines
+      ].join('\n');
+    }
   } catch(e) {
     status.textContent = 'Error';
-    out.textContent = JSON.stringify({ ok:false, error: e.message, cities: [] }, null, 2);
+    out.textContent = JSON.stringify({ ok:false, error:e.message, cities: [] }, null, 2);
     sel.disabled = true;
   }
 })();
+
+// Safety net for any stale '/api/locations1' markup
+if (typeof window !== 'undefined' && /locations1\b/.test(document.documentElement.innerHTML)) {
+  console.warn('Found stale /api/locations1 reference — should be /api/locations');
+}

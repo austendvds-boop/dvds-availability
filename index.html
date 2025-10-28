@@ -8,19 +8,21 @@
         href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" ry="12" fill="white"/><text x="50%" y="52%" font-size="40" text-anchor="middle" dominant-baseline="central">🚘</text></svg>' />
   <style>
     body { font: 16px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; line-height: 1.5; }
-    select, button { padding: 8px 12px; font: inherit; }
-    #open { display: none; margin-top: 12px; }
-    pre { background: #f5f5f5; padding: 12px; border-radius: 8px; overflow: auto; }
+    select, button, a { padding: 8px 12px; font: inherit; }
+    #location { min-width: 240px; }
+    #open { display: none; margin-top: 16px; background: #0050b3; color: #fff; border-radius: 6px; text-decoration: none; }
+    #open:hover { background: #003f8f; }
+    pre { background: #f5f5f5; padding: 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; }
     .muted { color: #667; }
   </style>
 </head>
 <body>
   <h1>DVDS Availability</h1>
-  <p class="muted">If the dropdown fills, the APIs and JSON configs are loading correctly.</p>
+  <p class="muted">If the dropdown fills and availability renders, the Acuity APIs and JSON configs are healthy.</p>
   <p><strong>Status:</strong> <span id="status">Booting…</span></p>
   <label for="location">Location</label>
   <select id="location" disabled></select>
-  <p><a id="open" class="muted" href="#" rel="noopener" target="_blank"></a></p>
+  <p><a id="open" href="#" rel="noopener" target="_blank">Book now</a></p>
   <pre id="out" class="muted">Select a location to view availability.</pre>
   <script type="module" src="/app.js"></script>
 </body>
