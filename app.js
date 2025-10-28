@@ -1,3 +1,7 @@
+if (typeof window !== 'undefined' && /locations1\b/.test(document.documentElement.innerHTML)) {
+  console.warn('Found stale /api/locations1 reference — should be /api/locations');
+}
+
 const API = { locations: '/api/locations' };
 
 async function getJSON(url) {
