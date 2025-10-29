@@ -1,3 +1,5 @@
+import packages from './packages.config.json' assert { type: 'json' };
+
 const API = {
   locations: '/api/locations',
   availability: '/api/availability',
@@ -17,6 +19,40 @@ const state = {
 };
 
 const ui = { selectedDay: null };
+
+const layoutContainer = document.querySelector('main.app');
+if (layoutContainer && !document.getElementById('package-section')) {
+  layoutContainer.insertAdjacentHTML('afterend', `
+    <section id="package-section" class="package-section" style="display:none;">
+      <h3 class="package-title">Step 2 — Choose your package</h3>
+      <div id="package-buttons" class="package-buttons"></div>
+    </section>
+  `);
+}
+
+const packageSection = document.getElementById('package-section');
+const packageButtons = document.getElementById('package-buttons');
+
+function renderPackages(cityKey) {
+  if (!packageSection || !packageButtons) return;
+  if (!cityKey) {
+    packageSection.style.display = 'none';
+    packageButtons.innerHTML = '';
+    return;
+  }
+  const set = packages[cityKey];
+  if (!set || !set.length) {
+    packageSection.style.display = 'none';
+    packageButtons.innerHTML = '';
+    return;
+  }
+  packageSection.style.display = 'block';
+  packageButtons.innerHTML = set.map(pkg => `
+    <a href="${pkg.url}" target="_blank" rel="noopener" class="pkg-btn">${pkg.label}</a>
+  `).join('');
+}
+
+renderPackages(null);
 
 function ymd(d){ return new Date(d).toISOString().slice(0,10); }
 function firstOfMonth(y,m){ return `${y}-${String(m).padStart(2,'0')}-01`; }
@@ -246,8 +282,13 @@ async function prefetchMonth(y,m){
 
     sel.addEventListener('change', async () => {
       const name = decodeURIComponent(sel.value || '');
-      if(!name) return;
+      if(!name) {
+        renderPackages(null);
+        return;
+      }
       state.city = loc.cities.find(c => c.name === name || c.label === name) || loc.cities.find(c=>c.name===name);
+
+      renderPackages(state.city?.name || state.city?.key || null);
 
       if(state.city?.url){
         book.href = state.city.url;
