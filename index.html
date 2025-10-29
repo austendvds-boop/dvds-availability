@@ -52,57 +52,79 @@
   .emptymsg{ color:var(--muted) }
   .sticky-actions{ margin-left:auto; display:flex; gap:8px }
 </style>
+<style>
+:root{--brand:#34b16a;--ink:#0b1320;--muted:#475569;--ring:#e2e8f0;--bg:#f8fafc;}
+.ui-wrap{max-width:1200px;margin:16px auto;padding:0 16px;}
+.eyebrow{font-size:.85rem;color:var(--muted);margin-bottom:8px;}
+.headline{font-size:1.5rem;font-weight:800;margin:0 0 12px;color:var(--ink);}
+.steps{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 16px;}
+.step{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--ring);border-radius:12px;background:#fff;font-weight:600;box-shadow:0 2px 10px rgba(15,23,42,.06);}
+.step small{font-weight:500;color:var(--muted);}
+.pkg-rail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(260px,1fr);gap:12px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory;}
+.pkg-card{scroll-snap-align:start;background:#fff;border:1px solid var(--ring);border-radius:16px;padding:14px;text-decoration:none;color:var(--ink);box-shadow:0 4px 16px rgba(15,23,42,.06);display:flex;flex-direction:column;gap:6px;}
+.pkg-title{font-weight:800;line-height:1.25;}
+.pkg-meta{font-size:.9rem;color:var(--muted);}
+.ribbons{display:flex;gap:8px;margin-top:4px;}
+.ribbon{font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ring);}
+.best{background:#f0f9ff;}
+.most{background:#f0fdf4;}
+.hint{margin-top:10px;padding:10px 12px;border:1px dashed var(--ring);border-radius:12px;background:var(--bg);color:var(--muted);font-size:.9rem;}
+.calendar-shell{margin-top:18px;}
+button[id*="book"],.book-location-btn{display:none!important;}
+@media(max-width:640px){.headline{font-size:1.25rem}.step{width:100%}.pkg-rail{grid-auto-columns:85%}}
+</style>
 </head>
 <body>
-  <header>
-    <h1>DVDS Availability</h1>
-    <div class="sub">If the dropdown fills and availability renders, the Acuity APIs and JSON configs are healthy.</div>
-    <div class="toolbar">
-      <div><span class="status" id="status">Loading…</span></div>
-      <label>Location
-        <select id="location" disabled></select>
-      </label>
-      <a id="book" class="book" target="_blank" rel="noopener">Book</a>
+  <div class="ui-wrap" id="packages-flow">
+    <div class="eyebrow">DVDS Availability</div>
+    <h2 class="headline">Pick a package to unlock your city’s lesson calendar</h2>
+    <div class="steps" aria-label="How booking works">
+      <div class="step">1) Choose a package <small>best fit & price</small></div>
+      <div class="step">2) Purchase securely <small>via Acuity</small></div>
+      <div class="step">3) Return here to pick times <small>use this calendar</small></div>
     </div>
-    <!-- DVDS: Steps + Packages (non-invasive) -->
-    <section id="dvds-steps-and-packages" style="margin:12px 0 0;">
-      <div id="dvds-steps" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-weight:800;">
-        <span style="opacity:.7;">1) Check availability</span>
-        <span style="opacity:.25;">•</span>
-        <span style="opacity:.7;">2) Pick a package</span>
-        <span style="opacity:.25;">•</span>
-        <span style="opacity:.7;">3) Book your times</span>
-      </div>
+    <div class="pkg-rail" id="pkg-rail" role="list"></div>
+    <p class="hint">Tip: After purchase, this page stays open. Select a date on the left and choose any available time for your city.</p>
+  </div>
 
-      <div id="dvds-packages-panel" style="margin-top:10px;">
-        <!-- Buttons will be injected here by app.js -->
+  <div class="ui-wrap calendar-shell">
+    <header>
+      <h1>DVDS Availability</h1>
+      <div class="sub">If the dropdown fills and availability renders, the Acuity APIs and JSON configs are healthy.</div>
+      <div class="toolbar">
+        <div><span class="status" id="status">Loading…</span></div>
+        <label>Location
+          <select id="location" disabled></select>
+        </label>
+        <a id="book" class="book" target="_blank" rel="noopener">Book</a>
       </div>
-    </section>
-  </header>
+    </header>
 
-  <main class="app">
-    <section class="cal" aria-live="polite">
-      <div class="cal-hdr">
-        <div class="nav">
-          <button id="prev" class="navbtn" aria-label="Previous Month">◀</button>
-          <button id="next" class="navbtn" aria-label="Next Month">▶</button>
+    <main class="app">
+      <section class="cal" aria-live="polite">
+        <div class="cal-hdr">
+          <div class="nav">
+            <button id="prev" class="navbtn" aria-label="Previous Month">◀</button>
+            <button id="next" class="navbtn" aria-label="Next Month">▶</button>
+          </div>
+          <div id="monthlabel" class="month">—</div>
         </div>
-        <div id="monthlabel" class="month">—</div>
-      </div>
-      <div class="grid" id="grid"></div>
-    </section>
+        <div class="grid" id="grid"></div>
+      </section>
 
-    <aside class="panel">
-      <div class="panel-hdr">
-        <div id="paneltitle" class="panel-title">Select a day</div>
-        <div class="sticky-actions"><a id="book2" class="book" target="_blank" rel="noopener">Book</a></div>
-      </div>
-      <div class="panel-body">
-        <div id="times" class="pills"></div>
-      </div>
-    </aside>
-  </main>
+      <aside class="panel">
+        <div class="panel-hdr">
+          <div id="paneltitle" class="panel-title">Select a day</div>
+          <div class="sticky-actions"><a id="book2" class="book" target="_blank" rel="noopener">Book</a></div>
+        </div>
+        <div class="panel-body">
+          <div id="times" class="pills"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
 
+  <script src="./ui-packages.js"></script>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
