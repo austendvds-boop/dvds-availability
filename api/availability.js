@@ -1,4 +1,5 @@
 const fetch = global.fetch;
+const accountOverride = new Map();
 
 function pickTimezone() {
   return process.env.ACUITY_TIMEZONE || process.env.TZ_DEFAULT || "America/Phoenix";
@@ -7,10 +8,13 @@ function pickDefaultDays() {
   const n = Number(process.env.ACUITY_DEFAULT_DAYS);
   return Number.isFinite(n) && n > 0 ? n : 14;
 }
+function normalizeAccount(account) {
+  return String(account || "").toLowerCase() === "parents" ? "parents" : "main";
+}
 function pickCreds(account) {
-  const isParents = String(account || "").toLowerCase() === "parents";
-  if (isParents) {
-    return { user: process.env.ACUITY_PARENTS_USER_ID, key: process.env.ACUITY_PARENTS_API_KEY, label: "parents" };
+  const label = normalizeAccount(account);
+  if (label === "parents") {
+    return { user: process.env.ACUITY_PARENTS_USER_ID, key: process.env.ACUITY_PARENTS_API_KEY, label };
   }
   return { user: process.env.ACUITY_MAIN_USER_ID, key: process.env.ACUITY_MAIN_API_KEY, label: "main" };
 }
@@ -92,16 +96,12 @@ module.exports = async (req, res) => {
     const cfg = locs[city] || {};
     if (!apptType) return res.status(404).json({ ok:false, error:`Unknown city or missing appointmentType for "${city}"` });
 
-    const { user, key, label } = pickCreds(cfg.account);
-    if (!user || !key) return res.status(500).json({ ok:false, error:`Missing ${label.toUpperCase()} credentials in env` });
-
     const tz = pickTimezone();
     const defaultDays = pickDefaultDays();
 
     const today = ymd(new Date());
     const start = fromQ || today;
     const end   = toQ   || ymd(new Date(Date.now() + defaultDays*86400000));
-    const auth  = Buffer.from(`${user}:${key}`).toString("base64");
 
     const base = "https://acuityscheduling.com/api/v1/availability";
 
@@ -117,41 +117,116 @@ module.exports = async (req, res) => {
       from: start,
       to: end
     };
-    let { resp: r1, json: j1, text: t1 } = await acuityJSON(urlFor("times", rangeQS), auth);
 
-    if (r1.ok && Array.isArray(j1)) {
-      const times = j1.map(t => ({
-        time: t.time,
-        slots: t.slots ?? 1,
-        readable: new Date(t.time).toLocaleString("en-US", { timeZone: tz })
-      }));
+    const configuredAccount = cfg.account || "main";
+    const normalizedConfigured = normalizeAccount(configuredAccount);
+    const cachedAccount = accountOverride.get(city);
+    const primaryAccount = cachedAccount || normalizedConfigured;
+    const fallbackAccount = primaryAccount === "parents" ? "main" : "parents";
+
+    const attempt = async (accountLabel) => {
+      const creds = pickCreds(accountLabel);
+      const { user, key, label } = creds;
+      if (!user || !key) {
+        return {
+          success: false,
+          status: 500,
+          error: `Missing ${label.toUpperCase()} credentials in env`,
+          detail: null,
+          statusCode: undefined
+        };
+      }
+
+      const auth = Buffer.from(`${user}:${key}`).toString("base64");
+      const { resp: r1, json: j1, text: t1 } = await acuityJSON(urlFor("times", rangeQS), auth);
+
+      if (r1.ok && Array.isArray(j1)) {
+        const times = j1.map(t => ({
+          time: t.time,
+          slots: t.slots ?? 1,
+          readable: new Date(t.time).toLocaleString("en-US", { timeZone: tz })
+        }));
+        return {
+          success: true,
+          payload: {
+            ok: true,
+            city,
+            account: cfg.account || "main",
+            appointmentType: apptType,
+            calendarId: cfg.calendarId ?? null,
+            timezone: tz,
+            range: { from: start, to: end },
+            count: times.length,
+            times
+          }
+        };
+      }
+
+      const detailPayload = j1 || t1;
+      const statusCode = typeof j1 === "object" && j1 !== null ? j1.status_code : undefined;
+      const needsDate = r1 && r1.status === 400 && (t1 || "").toLowerCase().includes("date") && (t1 || "").toLowerCase().includes("required");
+      if (!r1.ok && !needsDate) {
+        return {
+          success: false,
+          status: r1.status || 500,
+          error: `Acuity ${r1.status || 500}`,
+          detail: detailPayload,
+          statusCode
+        };
+      }
+
+      const days = datesBetween(start, end);
+      const { times, errors } = await perDayAggregate(days, tz, apptType, cfg, auth, urlFor);
+
+      return {
+        success: true,
+        payload: {
+          ok: true,
+          city,
+          account: cfg.account || "main",
+          appointmentType: apptType,
+          calendarId: cfg.calendarId ?? null,
+          timezone: tz,
+          range: { from: start, to: end },
+          count: times.length,
+          times,
+          errors
+        }
+      };
+    };
+
+    const shouldRetry = (result) => {
+      if (!result || result.success) return false;
+      const status = result.status;
+      const statusCode = result.statusCode;
+      return status === 403 || status === 404 || statusCode === 403 || statusCode === 404;
+    };
+
+    const finalize = (payload, usedAccount) => {
+      const enriched = {
+        ...payload,
+        accountConfigured: configuredAccount,
+        accountUsed: normalizeAccount(usedAccount)
+      };
       try { res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60'); } catch {}
-      return res.status(200).json({ ok:true, city, account: cfg.account || "main", appointmentType: apptType,
-        calendarId: cfg.calendarId ?? null, timezone: tz, range: { from: start, to: end }, count: times.length, times });
+      return res.status(200).json(enriched);
+    };
+
+    const firstAttempt = await attempt(primaryAccount);
+    if (firstAttempt.success) {
+      accountOverride.set(city, normalizeAccount(primaryAccount));
+      return finalize(firstAttempt.payload, primaryAccount);
     }
 
-    const needsDate = r1 && r1.status === 400 && (t1 || "").toLowerCase().includes("date") && (t1 || "").toLowerCase().includes("required");
-    if (!r1.ok && !needsDate) {
-      return res.status(r1.status || 500).json({ ok:false, error:`Acuity ${r1.status || 500}`, detail: j1 || t1 });
+    if (shouldRetry(firstAttempt) && fallbackAccount !== primaryAccount) {
+      const secondAttempt = await attempt(fallbackAccount);
+      if (secondAttempt.success) {
+        accountOverride.set(city, normalizeAccount(fallbackAccount));
+        return finalize(secondAttempt.payload, fallbackAccount);
+      }
     }
 
-    const days = datesBetween(start, end);
-    const { times, errors } = await perDayAggregate(days, tz, apptType, cfg, auth, urlFor);
-
-    try { res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60'); } catch {}
-
-    return res.status(200).json({
-      ok: true,
-      city,
-      account: cfg.account || "main",
-      appointmentType: apptType,
-      calendarId: cfg.calendarId ?? null,
-      timezone: tz,
-      range: { from: start, to: end },
-      count: times.length,
-      times,
-      errors
-    });
+    return res.status(firstAttempt.status || 500).json({ ok:false, error: firstAttempt.error, detail: firstAttempt.detail });
   } catch (err) {
     res.status(500).json({ ok:false, error: err.message });
   }

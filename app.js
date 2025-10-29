@@ -182,6 +182,11 @@ async function loadMonth(y,m,{prefetch=true}={}){
   try{
     const data = await getJSON(`${API.availability}?city=${encodeURIComponent(state.city.name)}&from=${from}&to=${to}`, state.inFlight.signal);
     if(!data.ok) throw new Error(data.error || 'availability failed');
+    if (data.accountUsed && data.accountConfigured && data.accountUsed !== data.accountConfigured) {
+      const note = { configured: data.accountConfigured, used: data.accountUsed };
+      data.debugAccount = note;
+      console.warn(`[availability] account override detected for ${state.city?.name || state.city?.label || 'city'}`, note);
+    }
     sset(key, data); state.cache.set(key, data);
     drawMonth(data);
     status.textContent = 'Ready';
