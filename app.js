@@ -18,6 +18,105 @@ const state = {
 
 const ui = { selectedDay: null };
 
+const PACKAGE_CATALOG = {
+  ultimate: { emoji: '🚀', title: 'Ultimate Package', details: '8 Lessons · 2.5 Hours Each (20 Hours Total)' },
+  license: { emoji: '🏁', title: 'License Ready Package', details: '4 Lessons · 2.5 Hours Each (10 Hours Total)' },
+  early: { emoji: '🌅', title: 'Early Bird Package', details: '2 Lessons · 5 Hours Total · Weekday mornings only' },
+  intro: { emoji: '🚘', title: 'Intro to Driving Package', details: '2 Lessons · 5 Hours Total' },
+  express: { emoji: '⚡', title: 'Express Lesson', details: '1 Lesson · 2.5 Hours Total' }
+};
+
+const PACKAGE_ORDER = ['ultimate', 'license', 'early', 'intro', 'express'];
+
+const PACKAGE_LINKS = {
+  'apache-junction': { owner: 23214568, packages: { ultimate: 2074785, license: 2074786, early: 2074789, intro: 2074791, express: 2074784 } },
+  'awatukee': { owner: 23214568, packages: { ultimate: 2074794, license: 2074797, early: 2074799, intro: 2074800, express: 2074801 } },
+  'casa-grande': { owner: 23214568, packages: { early: 2074803 } },
+  'cave-creek': { owner: 23214568, packages: { ultimate: 2074805, license: 2074806, early: 2074807, intro: 2074808, express: 2074809 } },
+  'chandler': { owner: 23214568, packages: { ultimate: 2074812, license: 2074813, early: 2074814, intro: 2074815, express: 2074816 } },
+  'downtown-phoenix': { owner: 23214568, packages: { ultimate: 2074818, license: 2074819, early: 2074820, intro: 2074821, express: 2074823 } },
+  'gilbert': { owner: 23214568, packages: { ultimate: 2074824, license: 2074826, early: 2074827, intro: 2074829, express: 2074831 } },
+  'mesa': { owner: 23214568, packages: { ultimate: 2074833, license: 2074834, early: 2074837, intro: 2074838, express: 2074839 } },
+  'queen-creek': { owner: 23214568, packages: { ultimate: 2074849, license: 2074850, early: 2074851, intro: 2074852, express: 2074854 } },
+  'san-tan-valley': { owner: 23214568, packages: { ultimate: 2074861, license: 2074864, early: 2074865, intro: 2074867, express: 2074868 } },
+  'scottsdale': { owner: 23214568, packages: { ultimate: 2074871, license: 2074872, early: 2074875, intro: 2074879, express: 2074881 } },
+  'tempe': { owner: 23214568, packages: { ultimate: 2074908, license: 2074909, early: 2074913, intro: 2074918, express: 2074920 } },
+  'westvalley': { owner: 23214568, packages: { early: 2074922 } },
+  'anthem': { owner: 28722957, packages: { ultimate: 2074776, license: 2074779, early: 2074780, intro: 2074782, express: 2074783 } },
+  'glendale': { owner: 28722957, packages: { ultimate: 2070512, license: 2070501, early: 2070518, intro: 2070516, express: 2070525 } },
+  'north-phoenix': { owner: 28722957, packages: { ultimate: 2074607, license: 2074609, early: 2074610, intro: 2074770, express: 2074774 } },
+  'peoria': { owner: 28722957, packages: { ultimate: 2074842, license: 2074844, early: 2074846, intro: 2074847, express: 2074848 } },
+  'sun-city': { owner: 28722957, packages: { ultimate: 2074900, license: 2074901, early: 2074902, intro: 2074904, express: 2074905 } },
+  'surprise': { owner: 28722957, packages: { ultimate: 2074885, license: 2074886, early: 2074887, intro: 2074888, express: 2074890 } }
+};
+
+const PACKAGE_NOTES = {
+  'casa-grande': 'Casa Grande currently offers only the Early Bird package.',
+  'westvalley': 'West Valley currently offers only the Early Bird package.'
+};
+
+const packageSection = typeof document !== 'undefined' ? document.getElementById('packages') : null;
+const packageGrid = typeof document !== 'undefined' ? document.getElementById('packageGrid') : null;
+const packageNote = typeof document !== 'undefined' ? document.getElementById('packages-note') : null;
+
+function buildPackageList(slug){
+  const entry = PACKAGE_LINKS[slug];
+  if(!entry || !entry.owner || !entry.packages) return [];
+  const { owner, packages } = entry;
+  const base = 'https://app.acuityscheduling.com/catalog.php';
+  const list = [];
+  for(const key of PACKAGE_ORDER){
+    const id = packages[key];
+    if(!id) continue;
+    const meta = PACKAGE_CATALOG[key];
+    if(!meta) continue;
+    const url = `${base}?owner=${owner}&action=addCart&clear=1&id=${id}`;
+    list.push({ ...meta, url });
+  }
+  return list;
+}
+
+function renderPackages(city){
+  if(!packageSection || !packageGrid) return;
+  const slug = city?.name || city?.key || '';
+  const list = buildPackageList(slug);
+  if(!list.length){
+    packageSection.classList.add('hidden');
+    packageGrid.innerHTML = '';
+    if(packageNote){
+      packageNote.textContent = '';
+      packageNote.classList.add('hidden');
+    }
+    return;
+  }
+
+  packageGrid.innerHTML = list.map(pkg => {
+    return `
+      <article class="package-card">
+        <div class="package-header">
+          <span class="package-emoji">${pkg.emoji}</span>
+          <span class="package-name">${pkg.title}</span>
+        </div>
+        <div class="package-details">${pkg.details}</div>
+        <a class="package-cta" href="${pkg.url}" target="_blank" rel="noopener">Book now →</a>
+      </article>
+    `;
+  }).join('');
+
+  if(packageNote){
+    const note = PACKAGE_NOTES[slug];
+    if(note){
+      packageNote.textContent = note;
+      packageNote.classList.remove('hidden');
+    }else{
+      packageNote.textContent = '';
+      packageNote.classList.add('hidden');
+    }
+  }
+
+  packageSection.classList.remove('hidden');
+}
+
 function ymd(d){ return new Date(d).toISOString().slice(0,10); }
 function firstOfMonth(y,m){ return `${y}-${String(m).padStart(2,'0')}-01`; }
 function lastOfMonth(y,m){ return ymd(new Date(y, m, 0)); }
@@ -255,6 +354,7 @@ async function prefetchMonth(y,m){
   const status = document.getElementById('status');
   const sel = document.getElementById('location');
   const times = document.getElementById('times');
+  const title = document.getElementById('paneltitle');
   const prev = document.getElementById('prev');
   const next = document.getElementById('next');
 
@@ -273,12 +373,23 @@ async function prefetchMonth(y,m){
     sel.disabled = false;
     status.textContent = 'Ready';
 
+    renderPackages(null);
+    if(times){ times.innerHTML = '<div class="emptymsg">Select a location to view availability.</div>'; }
+    if(title){ title.textContent = 'Select a day'; }
+
     sel.addEventListener('change', async () => {
       const name = decodeURIComponent(sel.value || '');
-      if(!name) return;
+      if(!name){
+        state.city = null;
+        renderPackages(null);
+        ui.selectedDay = null;
+        if(times){ times.innerHTML = '<div class="emptymsg">Select a location to view availability.</div>'; }
+        if(title){ title.textContent = 'Select a day'; }
+        return;
+      }
       state.city = loc.cities.find(c => c.name === name || c.label === name) || loc.cities.find(c=>c.name===name);
 
-      const label = state.city?.label || state.city?.name || '';
+      renderPackages(state.city);
 
       const today = new Date();
       await loadMonth(today.getFullYear(), today.getMonth()+1);
@@ -300,6 +411,7 @@ async function prefetchMonth(y,m){
     status.textContent = 'Error';
     times.textContent = JSON.stringify({ ok:false, error:e.message, cities:[] }, null, 2);
     sel.disabled = true;
+    renderPackages(null);
   }
 })();
 

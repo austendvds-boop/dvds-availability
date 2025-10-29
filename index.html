@@ -20,6 +20,8 @@
   .app{ display:grid; grid-template-columns: 1.4fr 1fr; gap:16px; padding:16px 20px }
   @media (max-width: 980px){ .app{ grid-template-columns: 1fr; } }
 
+  .hidden{ display:none !important; }
+
   /* Calendar */
   .cal{ border:1px solid var(--ring); border-radius:16px; overflow:hidden; background:#fff }
   .cal-hdr{ display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:var(--bg); border-bottom:1px solid var(--ring) }
@@ -45,10 +47,25 @@
   .panel{ border:1px solid var(--ring); border-radius:16px; overflow:hidden; background:#fff; display:flex; flex-direction:column; min-height:420px }
   .panel-hdr{ display:flex; align-items:center; gap:10px; padding:12px 14px; background:#f9fafb; border-bottom:1px solid var(--ring) }
   .panel-title{ font-weight:600 }
-  .panel-body{ padding:14px; }
+  .panel-body{ padding:14px; display:flex; flex-direction:column; gap:20px; }
   .pills{ display:flex; flex-wrap:wrap; gap:10px }
   .pill{ display:inline-block; padding:10px 14px; border:1px solid var(--ring); border-radius:12px; background:#fff; }
   .emptymsg{ color:var(--muted) }
+
+  /* Packages */
+  .packages{ border-top:1px solid var(--ring); padding-top:16px; display:flex; flex-direction:column; gap:16px; }
+  .packages-title{ font-weight:600; font-size:1.05rem; }
+  .packages-note{ color:var(--muted); font-size:.9rem; line-height:1.4; }
+  .packages-note.hidden{ display:none; }
+  .package-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+  .package-card{ border:1px solid var(--ring); border-radius:14px; padding:16px; background:var(--tile); display:flex; flex-direction:column; gap:12px; box-shadow:0 6px 20px rgba(15,23,42,0.06); transition:transform .15s, box-shadow .15s; }
+  .package-card:hover{ transform:translateY(-2px); box-shadow:0 12px 26px rgba(15,23,42,0.12); }
+  .package-header{ display:flex; align-items:center; gap:10px; font-weight:600; }
+  .package-emoji{ font-size:1.5rem; }
+  .package-name{ font-size:1.05rem; }
+  .package-details{ color:var(--muted); font-size:.9rem; line-height:1.4; }
+  .package-cta{ align-self:flex-start; padding:10px 16px; border-radius:999px; background:var(--brand); color:#fff; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px; transition:background .15s, transform .15s; }
+  .package-cta:hover{ background:var(--brand-ink); transform:translateY(-1px); }
 </style>
 </head>
 <body>
@@ -80,6 +97,13 @@
       </div>
       <div class="panel-body">
         <div id="times" class="pills"></div>
+        <section id="packages" class="packages hidden" aria-live="polite">
+          <div>
+            <div class="packages-title">Packages</div>
+            <div id="packages-note" class="packages-note hidden"></div>
+          </div>
+          <div id="packageGrid" class="package-grid"></div>
+        </section>
       </div>
     </aside>
   </main>
