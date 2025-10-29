@@ -1,0 +1,11 @@
+{
+  "name": "dvds-availability",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "npx serve .",
+    "test:api": "node -e \"require('./api/ok.js')({}, {status:c=>({json:o=>console.log(c,o)})})\""
+  }
+}

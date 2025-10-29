@@ -1,0 +1,128 @@
+{
+  "awatukee": {
+    "label": "Awatukee",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "apache-junction": {
+    "label": "Apache Junction",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "casa-grande": {
+    "label": "Casa Grande",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "cave-creek": {
+    "label": "Cave Creek",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "downtown-phoenix": {
+    "label": "Downtown Phoenix",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "gilbert": {
+    "label": "Gilbert",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "mesa": {
+    "label": "Mesa",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "queen-creek": {
+    "label": "Queen Creek",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "san-tan-valley": {
+    "label": "San Tan Valley",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "scottsdale": {
+    "label": "Scottsdale",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "tempe": {
+    "label": "Tempe",
+    "account": "students",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "anthem": {
+    "label": "Anthem",
+    "account": "parents",
+    "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+  },
+  "glendale": {
+    "label": "Glendale",
+    "account": "parents",
+    "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+  },
+  "north-phoenix": {
+    "label": "North Phoenix",
+    "account": "parents",
+    "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+  },
+  "peoria": {
+    "label": "Peoria",
+    "account": "parents",
+    "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+  },
+  "sun-city": {
+    "label": "Sun City",
+    "account": "parents",
+    "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+  },
+  "surprise": {
+    "label": "Surprise",
+    "account": "parents",
+    "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+  },
+  "chandler": {
+    "label": "Chandler",
+    "account": "main",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "westvalley": {
+    "label": "West Valley",
+    "account": "main",
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php?owner=23214568",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=85088423"
+  },
+  "buckeye": {
+    "label": "Buckeye",
+    "account": "main",
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php?owner=23214568",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=85088423"
+  },
+  "tolleson": {
+    "label": "Tolleson",
+    "account": "main",
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php?owner=23214568",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=85088423"
+  },
+  "laveen": {
+    "label": "Laveen",
+    "account": "main",
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php?owner=23214568",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=85088423"
+  }
+}
