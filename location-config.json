@@ -97,7 +97,7 @@
   },
   "chandler": {
     "label": "Chandler",
-    "account": "parents",
+    "account": "main",
     "owner": 23214568,
     "baseUrl": "https://app.acuityscheduling.com/schedule.php"
   }
