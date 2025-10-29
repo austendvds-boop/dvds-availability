@@ -20,9 +20,9 @@ const state = {
 
 const ui = { selectedDay: null };
 
-const layoutContainer = document.querySelector('main.app');
-if (layoutContainer && !document.getElementById('package-section')) {
-  layoutContainer.insertAdjacentHTML('afterend', `
+const calendarContainer = document.querySelector('#calendar-container');
+if (calendarContainer && !document.getElementById('package-section')) {
+  calendarContainer.insertAdjacentHTML('afterend', `
     <section id="package-section" class="package-section" style="display:none;">
       <h3 class="package-title">Step 2 — Choose your package</h3>
       <div id="package-buttons" class="package-buttons"></div>
@@ -32,6 +32,7 @@ if (layoutContainer && !document.getElementById('package-section')) {
 
 const packageSection = document.getElementById('package-section');
 const packageButtons = document.getElementById('package-buttons');
+const locationSelect = document.getElementById('city-select');
 
 function renderPackages(cityKey) {
   if (!packageSection || !packageButtons) return;
@@ -52,7 +53,7 @@ function renderPackages(cityKey) {
   `).join('');
 }
 
-renderPackages(null);
+renderPackages(locationSelect?.value || null);
 
 function ymd(d){ return new Date(d).toISOString().slice(0,10); }
 function firstOfMonth(y,m){ return `${y}-${String(m).padStart(2,'0')}-01`; }
@@ -258,7 +259,7 @@ async function prefetchMonth(y,m){
 
 (async function boot(){
   const status = document.getElementById('status');
-  const sel = document.getElementById('location');
+  const sel = locationSelect || document.getElementById('location');
   const book = document.getElementById('book');
   const book2 = document.getElementById('book2');
   const times = document.getElementById('times');
