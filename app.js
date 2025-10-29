@@ -294,3 +294,214 @@ async function prefetchMonth(y,m){
 if (typeof window !== 'undefined' && /locations1\b/.test(document.documentElement.innerHTML)) {
   console.warn('Found stale /api/locations1 reference — should be /api/locations');
 }
+
+/* ==== DVDS Packages CTA (non-invasive) ==== */
+(function(){
+  // Robustly locate the existing Location <select>. We DO NOT change it.
+  function findCitySelect(){
+    // Try common ids first, then fall back to the first select near the header.
+    return document.querySelector('#city, #location, select[name="city"]') 
+        || document.querySelector('header select') 
+        || document.querySelector('select');
+  }
+
+  // Mapping: City label (as shown in the dropdown) -> array of {label,url}
+  // Use exactly the links the owner provided.
+  const PACKAGES = {
+    "Apache Junction": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074785"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074786"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074789"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074791"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074784"},
+    ],
+    "Casa Grande": [
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074803", note:"Casa Grande: Early Bird only"}
+    ],
+    "Cave Creek": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074805"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074806"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074807"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074808"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074809"},
+    ],
+    "Chandler": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074812"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074813"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074814"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074815"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074816"},
+    ],
+    "Downtown Phoenix (South of I-10)": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074818"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074819"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074820"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074821"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074823"},
+    ],
+    "Gilbert": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074824"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074826"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074827"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074829"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074831"},
+    ],
+    "Mesa": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074833"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074834"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074837"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074838"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074839"},
+    ],
+    "Queen Creek": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074849"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074850"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074851"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074852"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074854"},
+    ],
+    "San Tan Valley": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074861"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074864"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074865"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074867"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074868"},
+    ],
+    "Scottsdale": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074871"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074872"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074875"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074879"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074881"},
+    ],
+    "Tempe": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074908"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074909"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074913"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074918"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074920"},
+    ],
+    "West Valley": [
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074922"}
+    ],
+    "Ahwatukee": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074794"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074797"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074799"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074800"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=23214568&action=addCart&clear=1&id=2074801"},
+    ],
+
+    /* Owner 28722957 cities: */
+    "Anthem": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074776"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074779"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074780"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074782"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074783"},
+    ],
+    "Glendale": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2070512"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2070501"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2070518"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2070516"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2070525"},
+    ],
+    "North Phoenix (North of I-10)": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074607"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074609"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074610"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074770"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074774"},
+    ],
+    "Peoria": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074842"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074844"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074846"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074847"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074848"},
+    ],
+    "Sun City": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074900"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074901"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074902"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074904"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074905"},
+    ],
+    "Surprise": [
+      {label:"🚀 Ultimate — 20 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074885"},
+      {label:"🏁 License Ready — 10 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074886"},
+      {label:"🌅 Early Bird — 5 hrs (M–F mornings)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074887"},
+      {label:"🚘 Intro — 5 hrs (2 lessons)", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074888"},
+      {label:"⚡ Express — 2.5 hrs", url:"https://app.acuityscheduling.com/catalog.php?owner=28722957&action=addCart&clear=1&id=2074890"},
+    ],
+  };
+
+  function getSelectedCity(){
+    const sel = findCitySelect();
+    if (!sel) return null;
+    const opt = sel.options[sel.selectedIndex];
+    return opt ? opt.text.trim() : null;
+  }
+
+  function renderPackagesFor(city){
+    const panel = document.getElementById('dvds-packages-panel');
+    if (!panel) return;
+
+    const items = PACKAGES[city] || [];
+    if (!items.length){
+      panel.innerHTML = ""; // hide if no mapping
+      return;
+    }
+
+    // Build buttons
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
+    grid.style.gap = '8px';
+
+    items.forEach(p=>{
+      const a = document.createElement('a');
+      a.textContent = p.label;
+      a.href = p.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.style.display = 'inline-block';
+      a.style.padding = '10px 12px';
+      a.style.border = '1px solid #e5e7eb';
+      a.style.borderRadius = '10px';
+      a.style.fontWeight = '800';
+      a.style.textDecoration = 'none';
+      a.style.background = '#fff';
+      a.onmouseenter = ()=>{ a.style.borderColor = '#0ea5e9'; };
+      a.onmouseleave = ()=>{ a.style.borderColor = '#e5e7eb'; };
+      grid.appendChild(a);
+    });
+
+    panel.innerHTML = "";
+    if (items.some(x=>x.note)){
+      const note = document.createElement('div');
+      note.style.margin = '6px 0 2px';
+      note.style.fontSize = '12px';
+      note.style.color = '#64748b';
+      note.textContent = items.find(x=>x.note)?.note || "";
+      panel.appendChild(note);
+    }
+    panel.appendChild(grid);
+  }
+
+  function wire(){
+    const sel = findCitySelect();
+    if (!sel) return;
+    renderPackagesFor(getSelectedCity());
+    sel.addEventListener('change', ()=>renderPackagesFor(getSelectedCity()));
+  }
+
+  // Run after DOM is ready
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
+})();
+/* ==== /DVDS Packages CTA ==== */
