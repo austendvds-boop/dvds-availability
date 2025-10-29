@@ -101,12 +101,6 @@
     "owner": 23214568,
     "baseUrl": "https://app.acuityscheduling.com/schedule.php"
   },
-  "westvalley": {
-    "label": "West Valley",
-    "account": "main",
-    "baseUrl": "https://app.acuityscheduling.com/schedule.php?owner=23214568",
-    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=85088423"
-  },
   "buckeye": {
     "label": "Buckeye",
     "account": "main",
