@@ -152,7 +152,21 @@ function drawMonth(data){
   buildGrid(days, by);
 }
 
-async function loadMonth(y,m,{prefetch=true}={}){
+function monthAfter(y,m){
+  return m === 12 ? [y + 1, 1] : [y, m + 1];
+}
+
+function hasFutureAvailability(times){
+  if(!Array.isArray(times) || !times.length) return false;
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  return times.some(slot => {
+    const when = new Date(slot.time);
+    return when >= now;
+  });
+}
+
+async function loadMonth(y,m,{prefetch=true, autoAdvance=true, visited}={}){
   const status = document.getElementById('status');
   const label  = document.getElementById('monthlabel');
   const grid   = document.getElementById('grid');
@@ -190,6 +204,23 @@ async function loadMonth(y,m,{prefetch=true}={}){
     sset(key, data); state.cache.set(key, data);
     drawMonth(data);
     status.textContent = 'Ready';
+
+    if(autoAdvance){
+      const monthEnd = new Date(to + 'T23:59:59');
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      if(monthEnd >= today && !hasFutureAvailability(data.times)){
+        const marker = `${y}-${m}`;
+        if(!visited){ visited = new Set(); }
+        if(!visited.has(marker)) visited.add(marker);
+        const [nextY, nextM] = monthAfter(y,m);
+        const nextKey = `${nextY}-${nextM}`;
+        if(!visited.has(nextKey) && visited.size <= 24){
+          await loadMonth(nextY, nextM, { prefetch, autoAdvance:true, visited });
+          return;
+        }
+      }
+    }
   }catch(e){
     if(e.name === 'AbortError') return;
     status.textContent = 'Error';
