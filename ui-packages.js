@@ -1,15 +1,16 @@
-// ui-packages.js — city-specific package links (append-only, no calendar/router edits)
+// ui-packages.js — city-specific package links (append-only, safe observer)
+// NOTE: Never observes <body>. Only observes the calendar container when present.
+
 (function(){
   const LABELS = [
-    {key:'Ultimate',      title:'🥇 Ultimate — 20 hrs (8×2.5h) — $1,299', ribbon:'Best Value', meta:'Includes MVD road test waiver + insurance waiver.'},
+    {key:'Ultimate',      title:'🥇 Ultimate — 20 hrs (8×2.5h) — $1,299', ribbon:'Best Value',       meta:'Includes MVD road test waiver + insurance waiver.'},
     {key:'License Ready', title:'🏁 License Ready — 10 hrs (4×2.5h) — $680', ribbon:'Most Purchased', meta:'Includes MVD road test waiver + insurance waiver.'},
-    {key:'Early Bird',    title:'🌅 Early Bird — 10 hrs (2×5h, M–F mornings) — $649', meta:'Save with weekday morning sessions.'},
-    {key:'Intro',         title:'🚘 Intro — 5 hrs (2×2.5h) — $350', meta:'Focused fundamentals + confidence building.'},
-    {key:'Express',       title:'⚡ Express — 2.5 hrs (1 lesson) — $200', meta:'Single lesson. Great for refreshers.'}
+    {key:'Early Bird',    title:'🌅 Early Bird — 10 hrs (2×5h, M–F mornings) — $649',                meta:'Save with weekday morning sessions.'},
+    {key:'Intro',         title:'🚘 Intro — 5 hrs (2×2.5h) — $350',                                   meta:'Focused fundamentals + confidence building.'},
+    {key:'Express',       title:'⚡ Express — 2.5 hrs (1 lesson) — $200',                              meta:'Single lesson. Great for refreshers.'}
   ];
 
   function detectCity(){
-    // Read-only detection: try dataset, headers, or select controls — never modify logic
     const fromData = document.querySelector('[data-current-city]')?.getAttribute('data-current-city');
     if (fromData) return fromData.trim();
     const header = document.querySelector('.current-city,#current-city,[data-city]')?.textContent;
@@ -25,7 +26,6 @@
     const cityLinks = map[city] || {};
     const available = LABELS.filter(def => cityLinks[def.key]);
 
-    // Special hint for Casa Grande & West Valley
     const hint = document.querySelector('#packages-flow .hint');
     if (hint){
       if (city === 'Casa Grande') hint.textContent = 'Casa Grande: Early Bird only (weekday mornings). After purchase, select your times in the calendar below.';
@@ -54,31 +54,52 @@
   }
 
   function hideLocationButtons(root=document){
+    // Hide only explicit "Book {City}" CTAs; do not touch dropdowns/labels.
     Array.from(root.querySelectorAll('button,a')).forEach(el=>{
       const t=(el.textContent||'').trim();
       if (/^Book\s+.+/i.test(t)) el.style.display='none';
     });
   }
 
+  // Debounce helper to avoid thrash during calendar updates
+  function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
+
   async function boot(){
-    // Load mapping
+    // Load static mapping
     let map={};
     try{
-      const res = await fetch('./package-links.json',{cache:'no-store'});
+      const res = await fetch('./package-links.json', {cache:'no-store'});
       map = await res.json();
-    }catch(e){ /* fail safe: render defaults with no links */ }
+    }catch(e){ /* safe fallback: labels render without links */ }
 
-    const paint = () => renderForCity(detectCity(), map);
+    const repaint = debounce(() => {
+      renderForCity(detectCity(), map);
+      hideLocationButtons();
+    }, 60);
 
-    paint();
-    hideLocationButtons();
+    // Initial paint
+    repaint();
 
-    // Keep hiding location buttons and repaint on UI changes without touching logic
-    const cal = document.getElementById('calendar') || document.querySelector('.calendar,#calendar-container,body');
-    if (cal){
-      new MutationObserver(()=>{ hideLocationButtons(cal); paint(); })
-        .observe(cal,{childList:true,subtree:true,characterData:true});
+    // Find a stable calendar container to observe (never observe <body>)
+    function getCalRoot(){
+      return document.getElementById('calendar') ||
+             document.querySelector('#calendar-container') ||
+             document.querySelector('.calendar');
     }
+
+    // Wait up to ~2s for the calendar container to appear, then observe it
+    let tries = 0;
+    (function waitForCal(){
+      const cal = getCalRoot();
+      if (cal){
+        const mo = new MutationObserver(repaint);
+        mo.observe(cal, {childList:true, subtree:true, characterData:true});
+        // One more paint in case city changed during load
+        repaint();
+        return;
+      }
+      if (tries++ < 20) setTimeout(waitForCal, 100);
+    })();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
