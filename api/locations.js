@@ -21,10 +21,14 @@ module.exports = async (_req, res) => {
         }
       }
 
+      const label = cfg.label || name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
       return {
+        key: name,
         name,
         appointmentType,
         ...cfg,
+        label,
         url,
       };
     });
