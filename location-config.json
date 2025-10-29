@@ -100,5 +100,33 @@
     "account": "main",
     "owner": 23214568,
     "baseUrl": "https://app.acuityscheduling.com/schedule.php"
+  },
+  "westvalley": {
+    "label": "West Valley",
+    "account": "main",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=category:West%20Valley%3A%20We%20do%202%20lessons%20of%205%20hours%20in%20West%20Valley"
+  },
+  "buckeye": {
+    "label": "Buckeye",
+    "account": "main",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=category:West%20Valley%3A%20We%20do%202%20lessons%20of%205%20hours%20in%20West%20Valley"
+  },
+  "tolleson": {
+    "label": "Tolleson",
+    "account": "main",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=category:West%20Valley%3A%20We%20do%202%20lessons%20of%205%20hours%20in%20West%20Valley"
+  },
+  "laveen": {
+    "label": "Laveen",
+    "account": "main",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=category:West%20Valley%3A%20We%20do%202%20lessons%20of%205%20hours%20in%20West%20Valley"
   }
 }
