@@ -249,18 +249,20 @@ async function prefetchMonth(y,m){
       if(!name) return;
       state.city = loc.cities.find(c => c.name === name || c.label === name) || loc.cities.find(c=>c.name===name);
 
+      const label = state.city?.label || state.city?.name || '';
+
       if(state.city?.url){
         book.href = state.city.url;
         book2.href = state.city.url;
-        book.textContent = `Book ${state.city.label||state.city.name}`;
-        book2.textContent = `Book ${state.city.label||state.city.name}`;
+        book.textContent = label;
+        book2.textContent = label;
         book.style.display = 'inline-block';
         book2.style.display = 'inline-block';
       } else if(state.city?.baseUrl){
         book.href = state.city.baseUrl;
         book2.href = state.city.baseUrl;
-        book.textContent = `Book ${state.city.label||state.city.name}`;
-        book2.textContent = `Book ${state.city.label||state.city.name}`;
+        book.textContent = label;
+        book2.textContent = label;
         book.style.display = 'inline-block';
         book2.style.display = 'inline-block';
       } else {
