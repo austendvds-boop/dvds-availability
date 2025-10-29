@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script>(function(){var st=document.createElement("style");st.textContent=".kill-book-city{display:none!important} button[id*=book],.book-location-btn{display:none!important}";document.head.appendChild(st);document.addEventListener("DOMContentLoaded",function(){var re=/^book\s+/i;var scan=function(root){root.querySelectorAll("button,a,[role=button]").forEach(function(el){var t=(el.textContent||"").replace(/\s+/g," ").trim();var l=(el.getAttribute("aria-label")||el.getAttribute("title")||"").trim();if(re.test(t)||re.test(l)){el.classList.add("kill-book-city");}});};scan(document);new MutationObserver(function(){scan(document)}).observe(document.documentElement,{childList:true,subtree:true});});})();</script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DVDS Availability</title>
+<style>
+  :root{
+    --ink:#0b1320; --muted:#6b7280; --ring:#e5e7eb; --bg:#f8fafc; --brand:#10b981; --brand-ink:#065f46;
+    --tile:#ffffff; --tile-muted:#f3f4f6; --tile-dark:#e5e7eb; --tile-hover:#f9fafb;
+  }
+  *{ box-sizing:border-box }
+  body{ margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto; color:var(--ink); background:#fff; }
+  header{ padding:16px 20px; border-bottom:1px solid var(--ring); position:sticky; top:0; background:#fff; z-index:20; }
+  h1{ font-size:1.4rem; margin:0 0 6px }
+  .sub{ color:var(--muted); font-size:.95rem }
+  .toolbar{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:8px }
+  select{ padding:10px 12px; border:1px solid var(--ring); border-radius:10px; font-size:1rem; }
+  .status{ font-weight:700 }
+  .book{ padding:10px 14px; border-radius:12px; background:var(--brand); color:#fff; text-decoration:none; margin-left:auto; display:none }
+  .app{ display:grid; grid-template-columns: 1.4fr 1fr; gap:16px; padding:16px 20px }
+  @media (max-width: 980px){ .app{ grid-template-columns: 1fr; } .book{ order:3; margin-left:0; } }
+
+  /* Calendar */
+  .cal{ border:1px solid var(--ring); border-radius:16px; overflow:hidden; background:#fff }
+  .cal-hdr{ display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:var(--bg); border-bottom:1px solid var(--ring) }
+  .nav{ display:flex; gap:8px; align-items:center }
+  .navbtn{ border:1px solid var(--ring); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer }
+  .month{ font-weight:600 }
+  .grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:var(--ring) }
+  .dow,.cell{ background:#fff; min-height:90px; padding:12px }
+  .dow{ text-align:center; font-size:.85rem; color:var(--muted); background:#f3f4f6 }
+  .cell{ position:relative; transition:background .15s }
+  .cell.clickable:hover{ background:var(--tile-hover); cursor:pointer }
+  .date{ font-weight:600; font-size:.95rem }
+  .badge{ position:absolute; right:10px; bottom:10px; font-size:.75rem; color:var(--brand-ink) }
+  .past{ color:#9ca3af; background:var(--tile-dark) }
+  .empty{ background:var(--tile-muted); color:#9ca3af }
+  .disabled{ pointer-events:none }
+  .today{ outline:2px solid #d1fae5; outline-offset:-4px; border-radius:8px }
+  .active{ box-shadow:0 0 0 2px var(--brand) inset; border-radius:8px }
+  .skeleton{ background:linear-gradient(90deg,#f8fafc,#eef2f7,#f8fafc); background-size:200% 100%; animation:sh 1.2s infinite; }
+  @keyframes sh{ 0%{background-position:0% 0;} 100%{background-position:200% 0;} }
+
+  /* Times panel */
+  .panel{ border:1px solid var(--ring); border-radius:16px; overflow:hidden; background:#fff; display:flex; flex-direction:column; min-height:420px }
+  .panel-hdr{ display:flex; align-items:center; gap:10px; padding:12px 14px; background:#f9fafb; border-bottom:1px solid var(--ring) }
+  .panel-title{ font-weight:600 }
+  .panel-body{ padding:14px; }
+  .pills{ display:flex; flex-wrap:wrap; gap:10px }
+  .pill{ display:inline-block; padding:10px 14px; border:1px solid var(--ring); border-radius:12px; background:#fff; }
+  .emptymsg{ color:var(--muted) }
+  .sticky-actions{ margin-left:auto; display:flex; gap:8px }
+</style>
+<style>
+:root{--brand:#34b16a;--brand-600:#28935a;--accent:#6366f1;--ink:#0b1320;--muted:#475569;--ring:#e2e8f0;--bg:#f8fafc;--chip:#eef2ff;}
+.ui-wrap{max-width:1200px;margin:16px auto;padding:0 16px;}
+.headline{font-size:1.6rem;font-weight:800;margin:0 0 12px;color:var(--ink);position:relative;}
+.headline:after{content:"";position:absolute;left:0;right:0;bottom:-10px;height:4px;background:linear-gradient(90deg,var(--brand),var(--accent));border-radius:999px;opacity:.35;}
+.steps{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0 16px;}
+.step{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--ring);border-radius:999px;background:#fff;font-weight:700;box-shadow:0 2px 10px rgba(15,23,42,.06);} .step small{font-weight:500;color:var(--muted);}
+.chip-row{display:flex;gap:10px;align-items:center;margin:6px 0 12px;}
+.chip{display:inline-flex;align-items:center;gap:8px;background:var(--chip);color:#1f2937;border:1px solid #e5e7eb;border-radius:999px;padding:6px 10px;font-weight:600;cursor:pointer;}
+.chip .dot{width:8px;height:8px;border-radius:999px;background:var(--accent);}
+.pkg-rail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(280px,1fr);gap:12px;overflow-x:auto;padding:8px 0;scroll-snap-type:x mandatory;}
+.pkg-card{scroll-snap-align:start;position:relative;background:#fff;border:1px solid var(--ring);border-radius:16px;padding:14px;text-decoration:none;color:var(--ink);box-shadow:0 4px 16px rgba(15,23,42,.06);display:flex;flex-direction:column;gap:6px;transition:transform .12s ease, box-shadow .12s ease;}
+.pkg-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(15,23,42,.10);}
+.pkg-title{font-weight:900;line-height:1.25;}
+.pkg-meta{font-size:.92rem;color:var(--muted);} .ribbons{display:flex;gap:8px;margin-top:6px;}
+.ribbon{font-size:.72rem;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid var(--ring);} .best{background:#ecfeff;} .most{background:#ecfdf5;}
+.pkg-border{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;border-top-left-radius:16px;border-bottom-left-radius:16px;}
+.border-ultimate{background:linear-gradient(180deg,#60a5fa,#818cf8);} .border-license{background:linear-gradient(180deg,#22c55e,#16a34a);} .border-early{background:linear-gradient(180deg,#f59e0b,#f97316);} .border-intro{background:linear-gradient(180deg,#c084fc,#a78bfa);} .border-express{background:linear-gradient(180deg,#f43f5e,#ef4444);}
+.hint{margin-top:10px;padding:10px 12px;border:1px dashed var(--ring);border-radius:12px;background:var(--bg);color:var(--muted);font-size:.92rem;}
+.calendar-shell{margin-top:18px;}
+button[id*="book"],.book-location-btn{display:none!important;} /* kill green Book {City} buttons visually */
+.kill-book-city{display:none!important}
+.cal-brand .month{background:linear-gradient(90deg,#f8fafc,#eef2ff);padding:6px 10px;border-radius:10px;font-weight:800;}
+.cal-brand .day--selected{outline:2px solid var(--brand);outline-offset:-2px;border-radius:10px;}
+@media(max-width:640px){.headline{font-size:1.3rem}.step{width:100%}.pkg-rail{grid-auto-columns:88%}}
+</style>
+
+</head>
+<body>
+  <div class="ui-wrap" id="packages-flow">
+    <h2 class="headline">Pick a package to unlock your city’s lesson calendar</h2>
+    <div class="steps" aria-label="How booking works">
+      <div class="step">1) Choose a package <small>best fit &amp; price</small></div>
+      <div class="step">2) Purchase securely <small>via Acuity</small></div>
+      <div class="step">3) Return here to pick times <small>use this calendar</small></div>
+    </div>
+    <div class="chip-row">
+      <div class="chip" id="change-location"><span class="dot"></span> Change location</div>
+      <div class="chip" id="current-city-chip" title="Current city">City: <span id="city-chip-name" style="font-weight:800;margin-left:6px">-</span></div>
+    </div>
+    <div class="pkg-rail" id="pkg-rail" role="list"></div>
+    <p class="hint" id="packages-hint">Tip: After purchase, this page stays open. Select a date on the left and choose any available time for your city.</p>
+  </div>
+
+  <div class="ui-wrap calendar-shell">
+    <header>
+
+      <h1>DVDS Availability</h1>
+      <div class="sub">If the dropdown fills and availability renders, the Acuity APIs and JSON configs are healthy.</div>
+      <div class="toolbar">
+        <div><span class="status" id="status">Loading…</span></div>
+        <label>Location
+          <select id="location" disabled></select>
+        </label>
+        <a id="book" class="book" target="_blank" rel="noopener">Book</a>
+      </div>
+    </header>
+
+    <main class="app">
+      <section class="cal" aria-live="polite">
+        <div class="cal-hdr">
+          <div class="nav">
+            <button id="prev" class="navbtn" aria-label="Previous Month">◀</button>
+            <button id="next" class="navbtn" aria-label="Next Month">▶</button>
+          </div>
+          <div id="monthlabel" class="month">—</div>
+        </div>
+        <div class="grid" id="grid"></div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-hdr">
+          <div id="paneltitle" class="panel-title">Select a day</div>
+          <div class="sticky-actions"><a id="book2" class="book" target="_blank" rel="noopener">Book</a></div>
+        </div>
+        <div class="panel-body">
+          <div id="times" class="pills"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="./ui-packages.js"></script>
+  <script type="module" src="/app.js"></script>
+  <script src="/js/next-available.js"></script>
+  <script src="/js/next-available-fallback.js"></script>
+</body>
+</html>
