@@ -1,5 +1,5 @@
-// ui-packages.js — city-specific package links (append-only, safe observer)
-// NOTE: Never observes <body>. Only observes the calendar container when present.
+// ui-packages.js — packages UI + aggressive hide for "Book {City}" CTAs
+// Safe: no edits to app.js, APIs, or router.
 
 (function(){
   const LABELS = [
@@ -11,13 +11,27 @@
   ];
 
   function detectCity(){
-    const fromData = document.querySelector('[data-current-city]')?.getAttribute('data-current-city');
-    if (fromData) return fromData.trim();
-    const header = document.querySelector('.current-city,#current-city,[data-city]')?.textContent;
-    if (header && header.trim()) return header.trim();
-    const sel = document.querySelector('select[name="city"],#city,.city-select');
-    if (sel && sel.value) return sel.value.trim();
-    return '';
+    return (
+      document.querySelector('[data-current-city]')?.getAttribute('data-current-city')?.trim() ||
+      document.querySelector('.current-city,#current-city,[data-city]')?.textContent?.trim() ||
+      document.querySelector('select[name="city"],#city,.city-select')?.value?.trim() || ''
+    );
+  }
+
+  // 🔒 Aggressively hide any "Book {City}" buttons/links by text (visual only)
+  function hideCityCTAs(root=document){
+    const nodes = Array.from(root.querySelectorAll('button,a,[role="button"]'));
+    nodes.forEach(el=>{
+      const txt = (el.textContent || '').replace(/\s+/g,' ').trim();
+      if (/^book\s+[a-z]/i.test(txt)) {
+        el.style.display = 'none';
+        el.setAttribute('hidden','true');
+        el.setAttribute('aria-hidden','true');
+        // Also try to collapse common wrapper rows if they only contained that CTA
+        const card = el.closest('.book-location-btn, .cta, .actions, .toolbar, .header, .footer');
+        if (card && card.children.length <= 2) { card.style.display = 'none'; card.setAttribute('hidden','true'); }
+      }
+    });
   }
 
   function renderForCity(city, map){
@@ -28,19 +42,19 @@
 
     const hint = document.querySelector('#packages-flow .hint');
     if (hint){
-      if (city === 'Casa Grande') hint.textContent = 'Casa Grande: Early Bird only (weekday mornings). After purchase, select your times in the calendar below.';
+      if (city === 'Casa Grande')      hint.textContent = 'Casa Grande: Early Bird only (weekday mornings). After purchase, select your times in the calendar below.';
       else if (city === 'West Valley') hint.textContent = 'West Valley: Early Bird only. After purchase, select your times in the calendar below.';
-      else hint.textContent = 'Tip: After purchase, this page stays open. Select a date on the left and choose any available time for your city.';
+      else                             hint.textContent = 'Tip: After purchase, this page stays open. Select a date on the left and choose any available time for your city.';
     }
 
     (available.length ? available : LABELS).forEach(def=>{
       const href = cityLinks[def.key];
       const a = document.createElement('a');
       a.className = 'pkg-card';
-      a.href = href || '#';
+      a.href   = href || '#';
       a.target = href ? '_blank' : '_self';
-      a.rel = href ? 'noopener noreferrer' : '';
-      a.role = 'listitem';
+      a.rel    = href ? 'noopener noreferrer' : '';
+      a.role   = 'listitem';
       a.innerHTML = `
         <div class="pkg-title">${def.title}</div>
         <div class="pkg-meta">${def.meta || ''}</div>
@@ -53,53 +67,43 @@
     });
   }
 
-  function hideLocationButtons(root=document){
-    // Hide only explicit "Book {City}" CTAs; do not touch dropdowns/labels.
-    Array.from(root.querySelectorAll('button,a')).forEach(el=>{
-      const t=(el.textContent||'').trim();
-      if (/^Book\s+.+/i.test(t)) el.style.display='none';
-    });
-  }
-
-  // Debounce helper to avoid thrash during calendar updates
-  function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
+  // Debounce to avoid thrash on calendar updates
+  function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
 
   async function boot(){
-    // Load static mapping
+    // Load static mapping (created earlier as package-links.json)
     let map={};
     try{
       const res = await fetch('./package-links.json', {cache:'no-store'});
       map = await res.json();
-    }catch(e){ /* safe fallback: labels render without links */ }
+    }catch(e){ /* ok to render without links */ }
 
-    const repaint = debounce(() => {
-      renderForCity(detectCity(), map);
-      hideLocationButtons();
-    }, 60);
+    const repaint = debounce(() => { renderForCity(detectCity(), map); hideCityCTAs(); }, 60);
 
-    // Initial paint
-    repaint();
+    // Initial pass
+    repaint(); hideCityCTAs();
 
-    // Find a stable calendar container to observe (never observe <body>)
-    function getCalRoot(){
-      return document.getElementById('calendar') ||
-             document.querySelector('#calendar-container') ||
-             document.querySelector('.calendar');
-    }
+    // Observe ONLY the calendar container (never <body>)
+    const findCal = () =>
+      document.getElementById('calendar') ||
+      document.querySelector('#calendar-container') ||
+      document.querySelector('.calendar');
 
-    // Wait up to ~2s for the calendar container to appear, then observe it
     let tries = 0;
     (function waitForCal(){
-      const cal = getCalRoot();
+      const cal = findCal();
       if (cal){
-        const mo = new MutationObserver(repaint);
-        mo.observe(cal, {childList:true, subtree:true, characterData:true});
-        // One more paint in case city changed during load
-        repaint();
+        new MutationObserver(()=>{ repaint(); hideCityCTAs(cal); })
+          .observe(cal, {childList:true, subtree:true, characterData:true});
+        repaint(); hideCityCTAs(cal);
         return;
       }
       if (tries++ < 20) setTimeout(waitForCal, 100);
     })();
+
+    // Belt & suspenders: brief hide sweeper for late UI injections
+    let sweeps = 0;
+    const interval = setInterval(()=>{ hideCityCTAs(); if (++sweeps > 12) clearInterval(interval); }, 250);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
