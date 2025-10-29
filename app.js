@@ -223,8 +223,6 @@ async function prefetchMonth(y,m){
 (async function boot(){
   const status = document.getElementById('status');
   const sel = document.getElementById('location');
-  const book = document.getElementById('book');
-  const book2 = document.getElementById('book2');
   const times = document.getElementById('times');
   const prev = document.getElementById('prev');
   const next = document.getElementById('next');
@@ -250,25 +248,6 @@ async function prefetchMonth(y,m){
       state.city = loc.cities.find(c => c.name === name || c.label === name) || loc.cities.find(c=>c.name===name);
 
       const label = state.city?.label || state.city?.name || '';
-
-      if(state.city?.url){
-        book.href = state.city.url;
-        book2.href = state.city.url;
-        book.textContent = label;
-        book2.textContent = label;
-        book.style.display = 'inline-block';
-        book2.style.display = 'inline-block';
-      } else if(state.city?.baseUrl){
-        book.href = state.city.baseUrl;
-        book2.href = state.city.baseUrl;
-        book.textContent = label;
-        book2.textContent = label;
-        book.style.display = 'inline-block';
-        book2.style.display = 'inline-block';
-      } else {
-        book.style.display = 'none';
-        book2.style.display = 'none';
-      }
 
       const today = new Date();
       await loadMonth(today.getFullYear(), today.getMonth()+1);
