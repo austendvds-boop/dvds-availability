@@ -39,6 +39,8 @@
   .disabled{ pointer-events:none }
   .today{ outline:2px solid #d1fae5; outline-offset:-4px; border-radius:8px }
   .active{ box-shadow:0 0 0 2px var(--brand) inset; border-radius:8px }
+  .skeleton{ background:linear-gradient(90deg,#f8fafc,#eef2f7,#f8fafc); background-size:200% 100%; animation:sh 1.2s infinite; }
+  @keyframes sh{ 0%{background-position:0% 0;} 100%{background-position:200% 0;} }
 
   /* Times panel */
   .panel{ border:1px solid var(--ring); border-radius:16px; overflow:hidden; background:#fff; display:flex; flex-direction:column; min-height:420px }
@@ -49,8 +51,6 @@
   .pill{ display:inline-block; padding:10px 14px; border:1px solid var(--ring); border-radius:12px; background:#fff; }
   .emptymsg{ color:var(--muted) }
   .sticky-actions{ margin-left:auto; display:flex; gap:8px }
-  .skeleton{ background:linear-gradient(90deg,#f8fafc,#eef2f7,#f8fafc); background-size:200% 100%; animation:sh 1.2s infinite; }
-  @keyframes sh{ 0%{background-position:0% 0;} 100%{background-position:200% 0;} }
 </style>
 </head>
 <body>
