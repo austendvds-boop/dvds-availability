@@ -41,6 +41,9 @@ const PACKAGE_LINKS = {
   'san-tan-valley': { owner: 23214568, packages: { ultimate: 2074861, license: 2074864, early: 2074865, intro: 2074867, express: 2074868 } },
   'scottsdale': { owner: 23214568, packages: { ultimate: 2074871, license: 2074872, early: 2074875, intro: 2074879, express: 2074881 } },
   'tempe': { owner: 23214568, packages: { ultimate: 2074908, license: 2074909, early: 2074913, intro: 2074918, express: 2074920 } },
+  'buckeye': { owner: 23214568, packages: { early: 2074922 } },
+  'tolleson': { owner: 23214568, packages: { early: 2074922 } },
+  'laveen': { owner: 23214568, packages: { early: 2074922 } },
   'anthem': { owner: 28722957, packages: { ultimate: 2074776, license: 2074779, early: 2074780, intro: 2074782, express: 2074783 } },
   'glendale': { owner: 28722957, packages: { ultimate: 2070512, license: 2070501, early: 2070518, intro: 2070516, express: 2070525 } },
   'north-phoenix': { owner: 28722957, packages: { ultimate: 2074607, license: 2074609, early: 2074610, intro: 2074770, express: 2074774 } },
@@ -50,7 +53,10 @@ const PACKAGE_LINKS = {
 };
 
 const PACKAGE_NOTES = {
-  'casa-grande': 'Casa Grande currently offers only the Early Bird package.'
+  'casa-grande': 'Casa Grande currently offers only the Early Bird package.',
+  'buckeye': 'Buckeye currently offers only the Early Bird package.',
+  'tolleson': 'Tolleson currently offers only the Early Bird package.',
+  'laveen': 'Laveen currently offers only the Early Bird package.'
 };
 
 const packageSection = typeof document !== 'undefined' ? document.getElementById('packages') : null;
