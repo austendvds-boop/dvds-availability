@@ -168,6 +168,7 @@ const packagesPlaceholder = typeof document !== 'undefined' ? document.getElemen
 const calendarLoadingEl = typeof document !== 'undefined' ? document.getElementById('calendar-loading') : null;
 
 const finderMessageEl = typeof document !== 'undefined' ? document.getElementById('finder-message') : null;
+const phoenixPromptEl = typeof document !== 'undefined' ? document.getElementById('finder-phoenix') : null;
 const step2Section = typeof document !== 'undefined' ? document.getElementById('step2') : null;
 const step3Section = typeof document !== 'undefined' ? document.getElementById('step3') : null;
 
@@ -379,6 +380,17 @@ function showFinderMessage(text, mode){
   finderMessageEl.classList.remove('error','success');
   if(mode === 'error'){ finderMessageEl.classList.add('error'); }
   else if(mode === 'success'){ finderMessageEl.classList.add('success'); }
+}
+
+function showPhoenixPrompt(text){
+  if(!phoenixPromptEl) return;
+  if(text){
+    phoenixPromptEl.textContent = text;
+    phoenixPromptEl.classList.remove('hidden');
+  }else{
+    phoenixPromptEl.textContent = '';
+    phoenixPromptEl.classList.add('hidden');
+  }
 }
 
 let mapsPromise = null;
@@ -597,7 +609,7 @@ function resetCalendarUI(){
   state.manualSelection = false;
   if(grid) grid.innerHTML = '';
   if(times) times.innerHTML = '<div class="emptymsg">Search for a city to view availability.</div>';
-  if(title) title.textContent = 'Select a day';
+  if(title) title.textContent = 'View available times';
   if(label) label.textContent = '—';
   hideCalendarLoading();
 }
@@ -611,6 +623,7 @@ function clearCity(){
   renderPackages(null);
   resetCalendarUI();
   setStepActive(step2Section, false);
+  showPhoenixPrompt(null);
 }
 
 async function applyResolution(result, normalized){
@@ -619,6 +632,12 @@ async function applyResolution(result, normalized){
   const title = document.getElementById('paneltitle');
 
   if(result.error){
+    const lower = typeof result.error === 'string' ? result.error.toLowerCase() : '';
+    if(lower.includes('phoenix') && lower.includes('zip')){
+      showPhoenixPrompt('Phoenix addresses require a ZIP code. Please enter a ZIP to continue.');
+    }else{
+      showPhoenixPrompt(null);
+    }
     showFinderMessage(`${result.error} Call 602-663-3502 for help.`, 'error');
     if(!state.city){
       resetCalendarUI();
@@ -634,16 +653,17 @@ async function applyResolution(result, normalized){
   }
 
   state.city = city;
+  showPhoenixPrompt(null);
   showFinderMessage(`Showing availability for ${city.label || city.name}.`, 'success');
   renderPackages(city);
   setStepActive(step2Section, true);
 
   state.manualSelection = false;
   if(times){
-    times.innerHTML = '<div class="emptymsg">Select a day to view available times.</div>';
+    times.innerHTML = '<div class="emptymsg">Tap a day to reveal available times.</div>';
   }
   if(title){
-    title.textContent = 'Select a day';
+    title.textContent = 'View available times';
   }
 
   const today = new Date();
@@ -659,10 +679,12 @@ async function processQuery({ query, place }){
   if(!trimmed){
     showFinderMessage('Search for your city or ZIP to view the packages available in your area.');
     clearCity();
+    showPhoenixPrompt(null);
     return;
   }
 
   showFinderMessage('Matching your location…');
+  showPhoenixPrompt(null);
   state.lastQuery = trimmed;
   state.lastQueryAt = Date.now();
 
@@ -967,8 +989,8 @@ async function loadMonth(y,m,{prefetch=true, autoAdvance=true, visited}={}){
   label.textContent = labelOf(y,m);
   grid.innerHTML = '';
   for(let i=0;i<14;i++){ const sk=document.createElement('div'); sk.className='cell skeleton'; grid.appendChild(sk); }
-  times.innerHTML = '<div class="emptymsg">Select a day to view available times.</div>';
-  title.textContent = 'Select a day';
+  times.innerHTML = '<div class="emptymsg">Tap a day to reveal available times.</div>';
+  title.textContent = 'View available times';
 
   const from = firstOfMonth(y,m);
   const to   = lastOfMonth(y,m);
@@ -1085,7 +1107,7 @@ async function prefetchMonth(y,m){
 
     if(status){ status.textContent = 'Ready'; }
     if(times){ times.innerHTML = '<div class="emptymsg">Search for a city to view availability.</div>'; }
-    if(title){ title.textContent = 'Select a day'; }
+    if(title){ title.textContent = 'View available times'; }
     if(finderInput){ finderInput.disabled = false; }
     if(clearBtn){ clearBtn.disabled = false; }
 
