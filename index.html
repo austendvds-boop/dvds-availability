@@ -11,11 +11,14 @@
   }
   *{ box-sizing:border-box }
   body{ margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto; color:var(--ink); background:#fff; }
-  header{ padding:16px 20px; border-bottom:1px solid var(--ring); position:sticky; top:0; background:#fff; z-index:20; }
-  h1{ font-size:1.4rem; margin:0 0 6px }
+  header{ padding:20px 20px 10px; border-bottom:1px solid var(--ring); position:sticky; top:0; background:#fff; z-index:20; }
+  h1{ font-size:1.6rem; margin:0 0 4px }
   .sub{ color:var(--muted); font-size:.95rem }
-  .toolbar{ display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-top:8px }
-  .finder{ display:flex; flex-direction:column; gap:6px; min-width:280px; }
+  .steps-intro{ margin:14px 0 0; display:flex; flex-direction:column; gap:6px; }
+  .step-chip-row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .step-chip{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:999px; border:1px solid var(--ring); background:#fff; font-weight:600; font-size:.92rem; }
+  .step-chip .num{ width:26px; height:26px; border-radius:50%; background:var(--brand); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:.85rem; }
+  .finder{ display:flex; flex-direction:column; gap:6px; width:100%; }
   .finder-label{ font-weight:600; font-size:.95rem; }
   .finder-box{ position:relative; display:flex; align-items:center; border:1px solid var(--ring); border-radius:12px; padding:4px 12px; background:#fff; }
   .finder-input{ flex:1; border:0; font-size:1rem; padding:8px 4px; outline:none; min-width:0; }
@@ -28,14 +31,24 @@
   .finder-message.error{ color:#b91c1c; }
   .finder-message.success{ color:var(--brand-ink); }
   .status{ font-weight:700 }
-  .app{ display:grid; grid-template-columns: minmax(0,1fr); gap:16px; padding:16px 20px; align-items:start }
-  .stack{ display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .app{ display:flex; flex-direction:column; gap:24px; padding:20px 20px 40px; }
+  .step-section{ border:1px solid var(--ring); border-radius:18px; padding:20px; background:#fff; display:flex; flex-direction:column; gap:16px; transition:border-color .2s, box-shadow .2s; }
+  .step-section.active{ border-color:var(--brand); box-shadow:0 16px 36px rgba(16,185,129,0.14); }
+  .step-head{ display:flex; gap:12px; align-items:flex-start; }
+  .step-num{ width:34px; height:34px; border-radius:50%; background:var(--ring); color:var(--muted); font-weight:700; display:flex; align-items:center; justify-content:center; font-size:1rem; transition:background .2s, color .2s; }
+  .step-section.active .step-num{ background:var(--brand); color:#fff; }
+  .step-meta{ display:flex; flex-direction:column; gap:4px; }
+  .step-title{ font-size:1.1rem; font-weight:700; }
+  .step-desc{ color:var(--muted); font-size:.92rem; line-height:1.4; }
+  .step-body{ display:flex; flex-direction:column; gap:16px; }
+  .finder{ max-width:640px; }
+  .two-col{ display:grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap:20px; align-items:start; }
   @media (max-width: 980px){
-    .app{ grid-template-columns:1fr; }
+    .two-col{ grid-template-columns:1fr; }
   }
   @media (max-width: 640px){
-    .finder{ width:100%; }
     .finder-box{ padding:4px 10px; }
+    .step-section{ padding:16px; }
   }
 
   .hidden{ display:none !important; }
@@ -87,54 +100,94 @@
   .package-details{ color:var(--muted); font-size:.9rem; line-height:1.4; }
   .package-cta{ align-self:flex-start; padding:10px 16px; border-radius:999px; background:var(--brand); color:#fff; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px; transition:background .15s, transform .15s; }
   .package-cta:hover{ background:var(--brand-ink); transform:translateY(-1px); }
+  .packages-placeholder{ padding:16px; border-radius:12px; background:var(--tile-muted); color:var(--muted); font-size:.95rem; }
 </style>
 </head>
 <body>
   <header>
     <h1>DVDS Availability</h1>
-    <div class="toolbar">
-      <div><span class="status" id="status">Loading…</span></div>
-      <form id="finder" class="finder" autocomplete="off">
-        <label for="finder-input" class="finder-label">Find your city, ZIP, or address</label>
-        <div class="finder-box">
-          <input id="finder-input" class="finder-input" type="search" placeholder="Start typing…" enterkeyhint="search" />
-          <button id="finder-clear" class="finder-clear" type="button" aria-label="Clear search">✕</button>
-        </div>
-      </form>
+    <div class="sub">Find lessons that fit your schedule and book the right package in minutes.</div>
+    <div class="steps-intro">
+      <div class="step-chip-row">
+        <div class="step-chip"><span class="num">1</span> Enter your location</div>
+        <div class="step-chip"><span class="num">2</span> Check availability</div>
+        <div class="step-chip"><span class="num">3</span> Choose your package</div>
+      </div>
     </div>
-    <div id="finder-message" class="finder-message">Search for your city or ZIP to view the packages available in your area.</div>
   </header>
 
   <main class="app">
-    <div class="stack">
-      <section class="cal" aria-live="polite">
-        <div class="cal-hdr">
-          <div class="nav">
-            <button id="prev" class="navbtn" aria-label="Previous Month">◀</button>
+    <section class="step-section active" id="step1">
+      <div class="step-head">
+        <div class="step-num">1</div>
+        <div class="step-meta">
+          <div class="step-title">Enter your location</div>
+          <div class="step-desc">Start with your city, ZIP code, or full address so we can route you to the right team.</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <div><span class="status" id="status">Loading…</span></div>
+        <form id="finder" class="finder" autocomplete="off">
+          <label for="finder-input" class="finder-label">Find your city, ZIP, or address</label>
+          <div class="finder-box">
+            <input id="finder-input" class="finder-input" type="search" placeholder="Start typing…" enterkeyhint="search" />
+            <button id="finder-clear" class="finder-clear" type="button" aria-label="Clear search">✕</button>
+          </div>
+        </form>
+        <div id="finder-message" class="finder-message">Search for your city or ZIP to view the packages available in your area.</div>
+      </div>
+    </section>
+
+    <section class="step-section" id="step2">
+      <div class="step-head">
+        <div class="step-num">2</div>
+        <div class="step-meta">
+          <div class="step-title">Check availability</div>
+          <div class="step-desc">Browse upcoming lesson openings and pick the day that works best for you.</div>
+        </div>
+      </div>
+      <div class="step-body two-col">
+        <section class="cal" aria-live="polite">
+          <div class="cal-hdr">
+            <div class="nav">
+              <button id="prev" class="navbtn" aria-label="Previous Month">◀</button>
             <button id="next" class="navbtn" aria-label="Next Month">▶</button>
           </div>
           <div id="monthlabel" class="month">—</div>
         </div>
-        <div id="calendar-loading" class="cal-loading hidden" role="status" aria-live="polite">Loading availability…</div>
-        <div class="grid" id="grid"></div>
-      </section>
+          <div id="calendar-loading" class="cal-loading hidden" role="status" aria-live="polite">Loading availability…</div>
+          <div class="grid" id="grid"></div>
+        </section>
+        <aside class="panel">
+          <div class="panel-hdr">
+            <div id="paneltitle" class="panel-title">Select a day</div>
+          </div>
+          <div class="panel-body">
+            <div id="times" class="pills"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
 
-      <aside class="panel">
-        <div class="panel-hdr">
-          <div id="paneltitle" class="panel-title">Select a day</div>
+    <section class="step-section" id="step3">
+      <div class="step-head">
+        <div class="step-num">3</div>
+        <div class="step-meta">
+          <div class="step-title">Choose your package</div>
+          <div class="step-desc">Once you pick a city, the packages available in that area will appear below.</div>
         </div>
-        <div class="panel-body">
-          <div id="times" class="pills"></div>
-          <section id="packages" class="packages hidden" aria-live="polite">
-            <div>
-              <div class="packages-title">Packages</div>
-              <div id="packages-note" class="packages-note hidden"></div>
-            </div>
-            <div id="packageGrid" class="package-grid"></div>
-          </section>
-        </div>
-      </aside>
-    </div>
+      </div>
+      <div class="step-body">
+        <div id="packages-placeholder" class="packages-placeholder">Search above to unlock the packages in your area.</div>
+        <section id="packages" class="packages hidden" aria-live="polite">
+          <div>
+            <div class="packages-title">Packages</div>
+            <div id="packages-note" class="packages-note hidden"></div>
+          </div>
+          <div id="packageGrid" class="package-grid"></div>
+        </section>
+      </div>
+    </section>
   </main>
 
   <script type="module" src="/app.js"></script>

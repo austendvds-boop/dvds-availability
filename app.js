@@ -66,9 +66,12 @@ const PACKAGE_NOTES = {
 const packageSection = typeof document !== 'undefined' ? document.getElementById('packages') : null;
 const packageGrid = typeof document !== 'undefined' ? document.getElementById('packageGrid') : null;
 const packageNote = typeof document !== 'undefined' ? document.getElementById('packages-note') : null;
+const packagesPlaceholder = typeof document !== 'undefined' ? document.getElementById('packages-placeholder') : null;
 const calendarLoadingEl = typeof document !== 'undefined' ? document.getElementById('calendar-loading') : null;
 
 const finderMessageEl = typeof document !== 'undefined' ? document.getElementById('finder-message') : null;
+const step2Section = typeof document !== 'undefined' ? document.getElementById('step2') : null;
+const step3Section = typeof document !== 'undefined' ? document.getElementById('step3') : null;
 
 const CITY_ALIAS_MAP = new Map([
   ['apache junction', 'apache-junction'],
@@ -154,6 +157,11 @@ const PHOENIX_SUBAREAS = new Map([
   ['south mountain', 'laveen']
 ]);
 
+function setStepActive(section, active){
+  if(!section) return;
+  section.classList.toggle('active', Boolean(active));
+}
+
 function buildPackageList(slug){
   const entry = PACKAGE_LINKS[slug];
   if(!entry || !entry.owner || !entry.packages) return [];
@@ -182,6 +190,13 @@ function renderPackages(city){
       packageNote.textContent = '';
       packageNote.classList.add('hidden');
     }
+    if(packagesPlaceholder){
+      packagesPlaceholder.classList.remove('hidden');
+      packagesPlaceholder.textContent = city
+        ? `Packages for ${city.label || city.name} are coming soon. Call 602-663-3502 for assistance.`
+        : 'Search above to unlock the packages in your area.';
+    }
+    setStepActive(step3Section, false);
     return;
   }
 
@@ -209,6 +224,10 @@ function renderPackages(city){
     }
   }
 
+  if(packagesPlaceholder){
+    packagesPlaceholder.classList.add('hidden');
+  }
+  setStepActive(step3Section, true);
   packageSection.classList.remove('hidden');
 }
 
@@ -492,6 +511,7 @@ function clearCity(){
   }
   renderPackages(null);
   resetCalendarUI();
+  setStepActive(step2Section, false);
 }
 
 async function applyResolution(result, normalized){
@@ -517,6 +537,7 @@ async function applyResolution(result, normalized){
   state.city = city;
   showFinderMessage(`Showing availability for ${city.label || city.name}.`, 'success');
   renderPackages(city);
+  setStepActive(step2Section, true);
 
   if(times){
     times.innerHTML = '<div class="emptymsg">Select a day to view available times.</div>';
