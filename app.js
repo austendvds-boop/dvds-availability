@@ -9,11 +9,15 @@ const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const state = {
   cities: [],
   city: null,
+  cityIndex: new Map(),
   y: null,
   m: null,
   cache: new Map(),
   env: null,
-  inFlight: null
+  inFlight: null,
+  googleKey: null,
+  googleReady: false,
+  autocomplete: null
 };
 
 const ui = { selectedDay: null };
@@ -62,6 +66,92 @@ const PACKAGE_NOTES = {
 const packageSection = typeof document !== 'undefined' ? document.getElementById('packages') : null;
 const packageGrid = typeof document !== 'undefined' ? document.getElementById('packageGrid') : null;
 const packageNote = typeof document !== 'undefined' ? document.getElementById('packages-note') : null;
+
+const finderMessageEl = typeof document !== 'undefined' ? document.getElementById('finder-message') : null;
+
+const CITY_ALIAS_MAP = new Map([
+  ['apache junction', 'apache-junction'],
+  ['apachejunction', 'apache-junction'],
+  ['aj', 'apache-junction'],
+  ['anthem', 'anthem'],
+  ['ahwatukee', 'awatukee'],
+  ['awatukee', 'awatukee'],
+  ['casa grande', 'casa-grande'],
+  ['casa-grande', 'casa-grande'],
+  ['cave creek', 'cave-creek'],
+  ['cavecreek', 'cave-creek'],
+  ['chandler', 'chandler'],
+  ['downtown phoenix', 'downtown-phoenix'],
+  ['downtown phx', 'downtown-phoenix'],
+  ['central phoenix', 'downtown-phoenix'],
+  ['central phx', 'downtown-phoenix'],
+  ['gilbert', 'gilbert'],
+  ['mesa', 'mesa'],
+  ['queen creek', 'queen-creek'],
+  ['queencreek', 'queen-creek'],
+  ['san tan valley', 'san-tan-valley'],
+  ['santan valley', 'san-tan-valley'],
+  ['san tan', 'san-tan-valley'],
+  ['scottsdale', 'scottsdale'],
+  ['tempe', 'tempe'],
+  ['buckeye', 'buckeye'],
+  ['tolleson', 'tolleson'],
+  ['laveen', 'laveen'],
+  ['maryvale', 'tolleson'],
+  ['desert hills', 'anthem'],
+  ['new river', 'anthem'],
+  ['north phoenix', 'north-phoenix'],
+  ['north phx', 'north-phoenix'],
+  ['north valley', 'north-phoenix'],
+  ['phx', 'phoenix'],
+  ['phoenix', 'phoenix'],
+  ['phoenix az', 'phoenix'],
+  ['sun city', 'sun-city'],
+  ['surprise', 'surprise'],
+  ['peoria', 'peoria'],
+  ['glendale', 'glendale'],
+  ['downtown', 'downtown-phoenix'],
+  ['desert ridge', 'north-phoenix'],
+  ['arcadia', 'downtown-phoenix']
+]);
+
+const CITY_CENTROIDS = {
+  'apache-junction': { lat: 33.415, lng: -111.5496 },
+  'awatukee': { lat: 33.3191, lng: -111.986 },
+  'casa-grande': { lat: 32.8795, lng: -111.7574 },
+  'cave-creek': { lat: 33.8334, lng: -111.9507 },
+  'downtown-phoenix': { lat: 33.4484, lng: -112.074 },
+  'gilbert': { lat: 33.3528, lng: -111.789 },
+  'mesa': { lat: 33.4152, lng: -111.8315 },
+  'queen-creek': { lat: 33.2484, lng: -111.6343 },
+  'san-tan-valley': { lat: 33.1934, lng: -111.528 },
+  'scottsdale': { lat: 33.4942, lng: -111.9261 },
+  'tempe': { lat: 33.4255, lng: -111.94 },
+  'buckeye': { lat: 33.3703, lng: -112.5838 },
+  'tolleson': { lat: 33.4501, lng: -112.259 },
+  'laveen': { lat: 33.3628, lng: -112.1667 },
+  'anthem': { lat: 33.8673, lng: -112.1469 },
+  'glendale': { lat: 33.5387, lng: -112.186 },
+  'north-phoenix': { lat: 33.6801, lng: -112.074 },
+  'peoria': { lat: 33.5806, lng: -112.2374 },
+  'sun-city': { lat: 33.6086, lng: -112.2718 },
+  'surprise': { lat: 33.6292, lng: -112.3679 },
+  'chandler': { lat: 33.3062, lng: -111.8413 }
+};
+
+const PHOENIX_SUBAREAS = new Map([
+  ['laveen', 'laveen'],
+  ['maryvale', 'tolleson'],
+  ['ahwatukee', 'awatukee'],
+  ['awatukee', 'awatukee'],
+  ['desert hills', 'anthem'],
+  ['new river', 'anthem'],
+  ['desert ridge', 'north-phoenix'],
+  ['north valley', 'north-phoenix'],
+  ['north phoenix', 'north-phoenix'],
+  ['west phoenix', 'tolleson'],
+  ['south mountain', 'laveen']
+]);
 
 function buildPackageList(slug){
   const entry = PACKAGE_LINKS[slug];
@@ -119,6 +209,510 @@ function renderPackages(city){
   }
 
   packageSection.classList.remove('hidden');
+}
+
+function normalizeToken(value){
+  if(!value || typeof value !== 'string') return '';
+  return value.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function slugFromAlias(value){
+  const key = normalizeToken(value);
+  return key ? CITY_ALIAS_MAP.get(key) || null : null;
+}
+
+function withTimestamp(url){
+  if(!url) return url;
+  const hasTs = /[?&]ts=/.test(url);
+  const ts = Date.now();
+  const sep = url.includes('?') ? '&' : '?';
+  return hasTs ? url.replace(/([?&]ts=)[^&]*/, `$1${ts}`) : `${url}${sep}ts=${ts}`;
+}
+
+function toRadians(deg){ return deg * (Math.PI/180); }
+
+function distanceMiles(lat1,lng1,lat2,lng2){
+  const R = 3958.8; // Earth radius in miles
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng/2)**2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function nearestCity(lat,lng){
+  let winner = null;
+  for(const [slug, coords] of Object.entries(CITY_CENTROIDS)){
+    if(typeof coords?.lat !== 'number' || typeof coords?.lng !== 'number') continue;
+    const dist = distanceMiles(lat, lng, coords.lat, coords.lng);
+    if(dist <= 20 && (!winner || dist < winner.distance)){
+      winner = { slug, distance: dist };
+    }
+  }
+  return winner;
+}
+
+function showFinderMessage(text, mode){
+  if(!finderMessageEl) return;
+  finderMessageEl.textContent = text;
+  finderMessageEl.classList.remove('error','success');
+  if(mode === 'error'){ finderMessageEl.classList.add('error'); }
+  else if(mode === 'success'){ finderMessageEl.classList.add('success'); }
+}
+
+let mapsPromise = null;
+
+function ensureGoogleMaps(key){
+  if(!key) return Promise.reject(new Error('missing Google Maps key'));
+  if(mapsPromise) return mapsPromise;
+  mapsPromise = new Promise((resolve, reject) => {
+    if(typeof window === 'undefined'){ resolve(null); return; }
+    const existing = document.querySelector('script[data-google-maps]');
+    if(existing){
+      existing.addEventListener('load', () => resolve(window.google || null));
+      existing.addEventListener('error', () => reject(new Error('Google Maps failed to load')));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=__initMaps`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleMaps = 'true';
+    window.__initMaps = () => {
+      resolve(window.google || null);
+      delete window.__initMaps;
+    };
+    script.addEventListener('error', () => {
+      delete window.__initMaps;
+      reject(new Error('Google Maps failed to load'));
+    });
+    document.head.appendChild(script);
+  });
+  return mapsPromise;
+}
+
+function parseAddressComponents(components){
+  if(!Array.isArray(components)) return {};
+  const find = (...types) => components.find(c => types.every(t => c.types.includes(t)));
+  const cityComp = components.find(c => c.types.includes('locality'))
+    || components.find(c => c.types.includes('postal_town'))
+    || components.find(c => c.types.includes('sublocality_level_1'))
+    || components.find(c => c.types.includes('administrative_area_level_3'));
+  const stateComp = find('administrative_area_level_1');
+  const postalComp = components.find(c => c.types.includes('postal_code'));
+  const sublocalities = components
+    .filter(c => c.types.some(t => t.startsWith('sublocality')))
+    .map(c => c.long_name?.toLowerCase?.() || '')
+    .filter(Boolean);
+
+  return {
+    city: cityComp?.long_name || '',
+    state: stateComp?.short_name || '',
+    postal: postalComp?.long_name || '',
+    sublocalities
+  };
+}
+
+function normalizePlace(place, query){
+  if(!place) return null;
+  const { city, state, postal, sublocalities } = parseAddressComponents(place.address_components);
+  let lat = null, lng = null;
+  const loc = place.geometry?.location;
+  if(loc){
+    lat = typeof loc.lat === 'function' ? loc.lat() : loc.lat;
+    lng = typeof loc.lng === 'function' ? loc.lng() : loc.lng;
+  }
+  const types = Array.isArray(place.types) ? place.types.slice() : [];
+  return {
+    raw: query || place.formatted_address || place.name || '',
+    city,
+    state,
+    postal,
+    sublocalities,
+    lat: typeof lat === 'number' ? lat : null,
+    lng: typeof lng === 'number' ? lng : null,
+    isZip: types.includes('postal_code'),
+    types,
+    slugHint: slugFromAlias(city),
+    source: 'autocomplete'
+  };
+}
+
+function normalizeGeocode(result, query, { isZip=false } = {}){
+  if(!result) return null;
+  const { city, state, postal, sublocalities } = parseAddressComponents(result.address_components);
+  const loc = result.geometry?.location;
+  let lat = null, lng = null;
+  if(loc){
+    lat = typeof loc.lat === 'function' ? loc.lat() : loc.lat;
+    lng = typeof loc.lng === 'function' ? loc.lng() : loc.lng;
+  }else if(result.geometry?.location_type && result.geometry?.bounds){
+    // fallback for API returning plain objects
+    lat = result.geometry?.location?.lat ?? null;
+    lng = result.geometry?.location?.lng ?? null;
+  }
+  return {
+    raw: query,
+    city,
+    state,
+    postal,
+    sublocalities,
+    lat: typeof lat === 'number' ? lat : null,
+    lng: typeof lng === 'number' ? lng : null,
+    isZip,
+    slugHint: slugFromAlias(city),
+    source: 'geocode'
+  };
+}
+
+async function geocodeAddress(query){
+  if(!state.googleKey) throw new Error('Google Maps key unavailable');
+  const params = new URLSearchParams({ address: query, key: state.googleKey, components: 'country:US' });
+  const resp = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`);
+  if(!resp.ok) throw new Error(`Geocode HTTP ${resp.status}`);
+  const data = await resp.json();
+  if(data.status !== 'OK' || !Array.isArray(data.results) || !data.results.length){
+    throw new Error(data.error_message || data.status || 'No geocode results');
+  }
+  return data.results[0];
+}
+
+function phoenixBand(lat){
+  if(typeof lat !== 'number') return null;
+  if(lat > 33.8) return 'anthem';
+  if(lat > 33.5236) return 'north-phoenix';
+  if(lat > 33.36) return 'downtown-phoenix';
+  return 'awatukee';
+}
+
+function detectPhoenixSubarea(normalized, rawLower){
+  const haystack = [rawLower, normalizeToken(normalized.city), ...(normalized.sublocalities||[])].filter(Boolean);
+  for(const chunk of haystack){
+    const alias = slugFromAlias(chunk);
+    if(alias && alias !== 'phoenix') return alias;
+    for(const [needle, slug] of PHOENIX_SUBAREAS.entries()){
+      if(chunk.includes(needle)) return slug;
+    }
+  }
+  return null;
+}
+
+function isGeneralPhoenix(normalized){
+  if(!normalized) return false;
+  const raw = normalized.raw || '';
+  const rawHasZip = /\b\d{5}(?:-\d{4})?\b/.test(raw);
+  const hasSub = Array.isArray(normalized.sublocalities) && normalized.sublocalities.length > 0;
+  const types = normalized.types || [];
+  const onlyLocality = types.length && types.every(t => t === 'locality' || t === 'political');
+  return !rawHasZip && !normalized.postal && !hasSub && (onlyLocality || !normalized.lat);
+}
+
+function resolveNormalized(normalized){
+  if(!normalized) return { error: 'We could not understand that location.' };
+  const rawLower = normalizeToken(normalized.raw);
+  const cityLower = normalizeToken(normalized.city);
+
+  if(normalized.state && normalized.state !== 'AZ'){
+    return { error: 'Outside our service area.' };
+  }
+
+  let slug = normalized.slugHint;
+  if(!slug) slug = slugFromAlias(cityLower);
+  if(!slug) slug = slugFromAlias(rawLower);
+
+  if(slug && slug !== 'phoenix'){
+    const city = lookupCity(slug);
+    if(city) return { city, slug, meta:{ method:'direct' } };
+  }
+
+  if((slug === 'phoenix') || cityLower === 'phoenix' || (rawLower && rawLower.includes('phoenix'))){
+    const sub = detectPhoenixSubarea(normalized, rawLower);
+    if(sub){
+      const city = lookupCity(sub);
+      if(city) return { city, slug: sub, meta:{ method:'phoenix-subarea' } };
+    }
+    if(isGeneralPhoenix(normalized)){
+      return { error: 'Phoenix spans multiple service areas. Please include a ZIP code to continue.' };
+    }
+    const latSlug = phoenixBand(normalized.lat);
+    if(latSlug){
+      const city = lookupCity(latSlug);
+      if(city) return { city, slug: latSlug, meta:{ method:'phoenix-band' } };
+    }
+    return { error: 'We still need a Phoenix ZIP code to finish routing you.' };
+  }
+
+  if(!slug && typeof normalized.lat === 'number' && typeof normalized.lng === 'number'){
+    const nearby = nearestCity(normalized.lat, normalized.lng);
+    if(nearby){
+      const city = lookupCity(nearby.slug);
+      if(city) return { city, slug: nearby.slug, meta:{ method:'proximity', distance: nearby.distance } };
+    }
+  }
+
+  if(slug){
+    const city = lookupCity(slug);
+    if(city) return { city, slug, meta:{ method:'direct' } };
+  }
+
+  return { error: 'We could not match that location. Please try again or call 602-663-3502.' };
+}
+
+function lookupCity(key){
+  if(!key) return null;
+  if(state.cityIndex.has(key)) return state.cityIndex.get(key);
+  return state.cities.find(c => c.name === key || c.key === key) || null;
+}
+
+function resetCalendarUI(){
+  const grid   = document.getElementById('grid');
+  const times  = document.getElementById('times');
+  const title  = document.getElementById('paneltitle');
+  const label  = document.getElementById('monthlabel');
+  ui.selectedDay = null;
+  state.y = null; state.m = null;
+  if(grid) grid.innerHTML = '';
+  if(times) times.innerHTML = '<div class="emptymsg">Search for a city to view availability.</div>';
+  if(title) title.textContent = 'Select a day';
+  if(label) label.textContent = '—';
+}
+
+function hideResultCard(){
+  const result = document.getElementById('result');
+  if(result) result.classList.add('hidden');
+  const frame = document.getElementById('result-frame');
+  if(frame){ frame.removeAttribute('src'); }
+}
+
+function clearCity(){
+  state.city = null;
+  if(state.inFlight){
+    try{ state.inFlight.abort(); }catch{}
+    state.inFlight = null;
+  }
+  renderPackages(null);
+  hideResultCard();
+  resetCalendarUI();
+}
+
+function describeResolution(city, normalized, meta){
+  const parts = [];
+  if(normalized?.raw){
+    parts.push(`Input: ${normalized.raw}`);
+  }
+  if(meta?.method === 'proximity' && typeof meta.distance === 'number'){
+    parts.push(`Routed to the nearest calendar (${meta.distance.toFixed(1)} mi)`);
+  }else if(meta?.method === 'phoenix-band'){
+    parts.push('Routed by Phoenix latitude band');
+  }else if(meta?.method === 'phoenix-subarea'){
+    parts.push('Routed by Phoenix sub-area');
+  }
+  parts.push('Need help? Call 602-663-3502.');
+  return parts.join(' · ');
+}
+
+let acuityScriptPromise = null;
+
+function upgradeAcuityEmbed(){
+  if(acuityScriptPromise) return acuityScriptPromise;
+  acuityScriptPromise = new Promise((resolve, reject) => {
+    if(typeof document === 'undefined'){ resolve(); return; }
+    if(document.querySelector('script[data-acuity-embed]')){ resolve(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://embed.acuityscheduling.com/js/embed.js';
+    script.async = true;
+    script.dataset.acuityEmbed = 'true';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Acuity embed failed to load'));
+    document.head.appendChild(script);
+  }).catch(err => {
+    console.warn('Acuity embed loader error', err);
+  });
+  return acuityScriptPromise;
+}
+
+function showResultCard(city, normalized, meta){
+  const container = document.getElementById('result');
+  const card = document.getElementById('result-card');
+  const title = document.getElementById('result-title');
+  const sub = document.getElementById('result-sub');
+  const link = document.getElementById('result-link');
+  const frame = document.getElementById('result-frame');
+  const errorEl = document.getElementById('result-error');
+  const toggle = document.getElementById('result-toggle');
+
+  if(!container || !card){
+    return;
+  }
+
+  const url = city.url || city.baseUrl;
+  if(!url){
+    if(errorEl){
+      errorEl.textContent = 'We could not load a scheduler for this city. Please call 602-663-3502.';
+      errorEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  const stamped = withTimestamp(url);
+  if(title){
+    title.textContent = `${city.label || city.name} scheduler`;
+  }
+  if(sub){
+    sub.textContent = describeResolution(city, normalized, meta);
+  }
+  if(link){
+    link.href = stamped;
+  }
+  if(errorEl){
+    errorEl.classList.add('hidden');
+    errorEl.textContent = '';
+  }
+  if(card){
+    card.classList.remove('collapsed');
+  }
+  if(toggle){
+    toggle.textContent = 'Collapse calendar';
+  }
+  if(frame && !frame.dataset.bound){
+    frame.addEventListener('load', () => {
+      if(errorEl){ errorEl.classList.add('hidden'); }
+    });
+    frame.addEventListener('error', () => {
+      if(errorEl){
+        errorEl.textContent = 'There was a problem loading the scheduler. Please call 602-663-3502.';
+        errorEl.classList.remove('hidden');
+      }
+    });
+    frame.dataset.bound = 'true';
+  }
+  if(frame){
+    frame.src = stamped;
+  }
+
+  container.classList.remove('hidden');
+  upgradeAcuityEmbed();
+}
+
+async function applyResolution(result, normalized){
+  const status = document.getElementById('status');
+  const times = document.getElementById('times');
+  const title = document.getElementById('paneltitle');
+
+  if(result.error){
+    showFinderMessage(`${result.error} Call 602-663-3502 for help.`, 'error');
+    if(!state.city){
+      resetCalendarUI();
+      hideResultCard();
+      renderPackages(null);
+    }
+    return;
+  }
+
+  const city = result.city;
+  if(!city){
+    showFinderMessage('We could not match that location. Call 602-663-3502 for help.', 'error');
+    return;
+  }
+
+  state.city = city;
+  showFinderMessage(`Showing availability for ${city.label || city.name}.`, 'success');
+  renderPackages(city);
+  showResultCard(city, normalized, result.meta || {});
+
+  if(times){
+    times.innerHTML = '<div class="emptymsg">Select a day to view available times.</div>';
+  }
+  if(title){
+    title.textContent = 'Select a day';
+  }
+
+  const today = new Date();
+  await loadMonth(today.getFullYear(), today.getMonth()+1);
+
+  if(status){
+    status.textContent = 'Ready';
+  }
+}
+
+async function processQuery({ query, place }){
+  const trimmed = (query || '').trim();
+  if(!trimmed){
+    showFinderMessage('Search for your city or ZIP to load the correct scheduler.');
+    clearCity();
+    return;
+  }
+
+  showFinderMessage('Matching your location…');
+
+  try {
+    let normalized = null;
+    const directSlug = slugFromAlias(trimmed);
+    const isZip = /^\d{5}(?:-\d{4})?$/.test(trimmed);
+
+    if(place){
+      normalized = normalizePlace(place, trimmed);
+    }
+
+    if(!normalized && directSlug && directSlug !== 'phoenix'){
+      const city = lookupCity(directSlug);
+      const coords = CITY_CENTROIDS[directSlug] || {};
+      normalized = {
+        raw: trimmed,
+        city: city?.label || city?.name || trimmed,
+        state: 'AZ',
+        postal: isZip ? trimmed : '',
+        sublocalities: [],
+        lat: typeof coords.lat === 'number' ? coords.lat : null,
+        lng: typeof coords.lng === 'number' ? coords.lng : null,
+        isZip,
+        slugHint: directSlug,
+        source: 'direct'
+      };
+    }
+
+    if(!normalized && directSlug === 'phoenix'){
+      normalized = {
+        raw: trimmed,
+        city: 'Phoenix',
+        state: 'AZ',
+        postal: '',
+        sublocalities: [],
+        lat: null,
+        lng: null,
+        isZip,
+        slugHint: 'phoenix',
+        source: 'direct'
+      };
+    }
+
+    if(!normalized){
+      if(!state.googleKey){
+        throw new Error('Maps key unavailable');
+      }
+      const geoResult = await geocodeAddress(trimmed);
+      normalized = normalizeGeocode(geoResult, trimmed, { isZip });
+    }
+
+    if(normalized && (!normalized.lat || !normalized.lng) && normalized.slugHint && CITY_CENTROIDS[normalized.slugHint]){
+      const coords = CITY_CENTROIDS[normalized.slugHint];
+      normalized.lat = typeof normalized.lat === 'number' ? normalized.lat : coords.lat;
+      normalized.lng = typeof normalized.lng === 'number' ? normalized.lng : coords.lng;
+    }
+
+    const resolution = resolveNormalized(normalized);
+    await applyResolution(resolution, normalized);
+  } catch (err) {
+    console.error('Location lookup failed', err);
+    showFinderMessage('We could not look up that location. Please try again or call 602-663-3502.', 'error');
+    if(!state.city){
+      clearCity();
+    }
+  }
+}
+
+async function handleQuery(query){
+  return processQuery({ query });
 }
 
 function ymd(d){ return new Date(d).toISOString().slice(0,10); }
@@ -276,6 +870,10 @@ async function loadMonth(y,m,{prefetch=true, autoAdvance=true, visited}={}){
   const times  = document.getElementById('times');
   const title  = document.getElementById('paneltitle');
 
+  if(!state.city){
+    return;
+  }
+
   state.y=y; state.m=m;
   ui.selectedDay = null;
   label.textContent = labelOf(y,m);
@@ -344,6 +942,7 @@ async function loadMonth(y,m,{prefetch=true, autoAdvance=true, visited}={}){
 }
 
 async function prefetchMonth(y,m){
+  if(!state.city) return;
   const key = monthKey(state.city.name, y, m);
   if(state.cache.has(key) || sget(key)) return;
   const from = firstOfMonth(y,m);
@@ -356,11 +955,24 @@ async function prefetchMonth(y,m){
 
 (async function boot(){
   const status = document.getElementById('status');
-  const sel = document.getElementById('location');
   const times = document.getElementById('times');
   const title = document.getElementById('paneltitle');
   const prev = document.getElementById('prev');
   const next = document.getElementById('next');
+  const finder = document.getElementById('finder');
+  const finderInput = document.getElementById('finder-input');
+  const clearBtn = document.getElementById('finder-clear');
+  const resultToggle = document.getElementById('result-toggle');
+  const resultCard = document.getElementById('result-card');
+
+  if(finderInput){ finderInput.disabled = true; }
+  if(clearBtn){ clearBtn.disabled = true; }
+
+  resetCalendarUI();
+  renderPackages(null);
+
+  const defaultMessage = 'Search for your city or ZIP to load the correct scheduler.';
+  showFinderMessage(defaultMessage);
 
   try{
     const [loc, env] = await Promise.all([
@@ -371,51 +983,95 @@ async function prefetchMonth(y,m){
     if(!loc.ok) throw new Error(loc.error || 'locations failed');
 
     state.env = env;
-    state.cities = loc.cities;
-    sel.innerHTML = '<option value="">Select a location…</option>' +
-      loc.cities.map(c => `<option value="${encodeURIComponent(c.name)}">${c.label || c.name}</option>`).join('');
-    sel.disabled = false;
-    status.textContent = 'Ready';
-
-    renderPackages(null);
-    if(times){ times.innerHTML = '<div class="emptymsg">Select a location to view availability.</div>'; }
-    if(title){ title.textContent = 'Select a day'; }
-
-    sel.addEventListener('change', async () => {
-      const name = decodeURIComponent(sel.value || '');
-      if(!name){
-        state.city = null;
-        renderPackages(null);
-        ui.selectedDay = null;
-        if(times){ times.innerHTML = '<div class="emptymsg">Select a location to view availability.</div>'; }
-        if(title){ title.textContent = 'Select a day'; }
-        return;
-      }
-      state.city = loc.cities.find(c => c.name === name || c.label === name) || loc.cities.find(c=>c.name===name);
-
-      renderPackages(state.city);
-
-      const today = new Date();
-      await loadMonth(today.getFullYear(), today.getMonth()+1);
+    state.cities = Array.isArray(loc.cities) ? loc.cities : [];
+    state.cityIndex = new Map();
+    state.cities.forEach((city) => {
+      if(!city) return;
+      const slug = city.name || city.key;
+      if(slug) state.cityIndex.set(slug, city);
+      if(city.key) state.cityIndex.set(city.key, city);
+      if(city.label) state.cityIndex.set(normalizeToken(city.label), city);
     });
 
-    prev.addEventListener('click', async ()=>{
+    if(status){ status.textContent = 'Ready'; }
+    if(times){ times.innerHTML = '<div class="emptymsg">Search for a city to view availability.</div>'; }
+    if(title){ title.textContent = 'Select a day'; }
+    if(finderInput){ finderInput.disabled = false; }
+    if(clearBtn){ clearBtn.disabled = false; }
+
+    const mapsKey = env?.googlemapsapi || env?.googleMapsApiKey || env?.googleMapsKey || env?.GOOGLE_MAPS_API_KEY;
+    if(mapsKey){
+      state.googleKey = mapsKey;
+      ensureGoogleMaps(mapsKey).then(google => {
+        state.googleReady = !!google;
+        if(!google || !finderInput) return;
+        const autocomplete = new google.maps.places.Autocomplete(finderInput, {
+          fields: ['address_components','geometry','formatted_address','name','types']
+        });
+        state.autocomplete = autocomplete;
+        autocomplete.addListener('place_changed', async () => {
+          const place = autocomplete.getPlace();
+          if(!place || (!place.geometry && !place.address_components)){
+            await handleQuery(finderInput.value || '');
+            return;
+          }
+          await processQuery({ query: finderInput.value || place.formatted_address || '', place });
+        });
+      }).catch(err => {
+        console.warn('Google Maps failed to load', err);
+        showFinderMessage('Autocomplete is unavailable. Enter a full address or ZIP and press Enter.', 'error');
+      });
+    } else {
+      showFinderMessage('Autocomplete is unavailable. Enter a full address or ZIP and press Enter.', 'error');
+    }
+
+    finder?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await handleQuery(finderInput?.value || '');
+    });
+
+    finderInput?.addEventListener('keydown', async (event) => {
+      if(event.key === 'Enter'){
+        event.preventDefault();
+        await handleQuery(finderInput.value || '');
+      }
+    });
+
+    clearBtn?.addEventListener('click', () => {
+      if(finderInput){
+        finderInput.value = '';
+        finderInput.focus();
+      }
+      showFinderMessage(defaultMessage);
+      clearCity();
+    });
+
+    resultToggle?.addEventListener('click', () => {
+      if(!resultCard) return;
+      const collapsed = resultCard.classList.toggle('collapsed');
+      resultToggle.textContent = collapsed ? 'Expand calendar' : 'Collapse calendar';
+    });
+
+    prev?.addEventListener('click', async ()=>{
       if(!state.city) return;
       const m = state.m===1 ? 12 : state.m-1;
       const y = state.m===1 ? state.y-1 : state.y;
       await loadMonth(y,m);
     });
-    next.addEventListener('click', async ()=>{
+    next?.addEventListener('click', async ()=>{
       if(!state.city) return;
       const m = state.m===12 ? 1 : state.m+1;
       const y = state.m===12 ? state.y+1 : state.y;
       await loadMonth(y,m);
     });
   }catch(e){
-    status.textContent = 'Error';
-    times.textContent = JSON.stringify({ ok:false, error:e.message, cities:[] }, null, 2);
-    sel.disabled = true;
+    console.error('Boot failure', e);
+    if(status){ status.textContent = 'Error'; }
+    if(times){ times.textContent = JSON.stringify({ ok:false, error:e.message, cities:[] }, null, 2); }
+    showFinderMessage('We could not load availability. Please call 602-663-3502.', 'error');
     renderPackages(null);
+    if(finderInput){ finderInput.disabled = false; }
+    if(clearBtn){ clearBtn.disabled = false; }
   }
 })();
 
