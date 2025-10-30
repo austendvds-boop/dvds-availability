@@ -405,10 +405,12 @@ function isGeneralPhoenix(normalized){
   if(!normalized) return false;
   const raw = normalized.raw || '';
   const rawHasZip = /\b\d{5}(?:-\d{4})?\b/.test(raw);
+  const hasPostal = Boolean(normalized.postal);
   const hasSub = Array.isArray(normalized.sublocalities) && normalized.sublocalities.length > 0;
-  const types = normalized.types || [];
-  const onlyLocality = types.length && types.every(t => t === 'locality' || t === 'political');
-  return !rawHasZip && !normalized.postal && !hasSub && (onlyLocality || !normalized.lat);
+  const slugIsPhoenix = !normalized.slugHint || normalized.slugHint === 'phoenix';
+  const cityLower = normalizeToken(normalized.city);
+  const cityIsPhoenix = !cityLower || cityLower === 'phoenix';
+  return slugIsPhoenix && cityIsPhoenix && !rawHasZip && !hasPostal && !hasSub;
 }
 
 function resolveNormalized(normalized){
