@@ -43,6 +43,8 @@
   /* Calendar */
   .cal{ border:1px solid var(--ring); border-radius:16px; overflow:hidden; background:#fff }
   .cal-hdr{ display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:var(--bg); border-bottom:1px solid var(--ring) }
+  .cal-loading{ display:flex; align-items:center; gap:8px; padding:10px 14px; font-size:.9rem; color:#92400e; background:#fef3c7; border-bottom:1px solid var(--ring); }
+  .cal-loading::before{ content:''; width:14px; height:14px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
   .nav{ display:flex; gap:8px; align-items:center }
   .navbtn{ border:1px solid var(--ring); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer }
   .month{ font-weight:600 }
@@ -59,6 +61,7 @@
   .today{ outline:2px solid #d1fae5; outline-offset:-4px; border-radius:8px }
   .active{ box-shadow:0 0 0 2px var(--brand) inset; border-radius:8px }
   .skeleton{ background:linear-gradient(90deg,#f8fafc,#eef2f7,#f8fafc); background-size:200% 100%; animation:sh 1.2s infinite; }
+  @keyframes spin{ 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
   @keyframes sh{ 0%{background-position:0% 0;} 100%{background-position:200% 0;} }
 
   /* Times panel */
@@ -112,6 +115,7 @@
           </div>
           <div id="monthlabel" class="month">—</div>
         </div>
+        <div id="calendar-loading" class="cal-loading hidden" role="status" aria-live="polite">Loading availability…</div>
         <div class="grid" id="grid"></div>
       </section>
 

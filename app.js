@@ -66,6 +66,7 @@ const PACKAGE_NOTES = {
 const packageSection = typeof document !== 'undefined' ? document.getElementById('packages') : null;
 const packageGrid = typeof document !== 'undefined' ? document.getElementById('packageGrid') : null;
 const packageNote = typeof document !== 'undefined' ? document.getElementById('packages-note') : null;
+const calendarLoadingEl = typeof document !== 'undefined' ? document.getElementById('calendar-loading') : null;
 
 const finderMessageEl = typeof document !== 'undefined' ? document.getElementById('finder-message') : null;
 
@@ -209,6 +210,17 @@ function renderPackages(city){
   }
 
   packageSection.classList.remove('hidden');
+}
+
+function showCalendarLoading(message = 'Loading availability…'){
+  if(!calendarLoadingEl) return;
+  calendarLoadingEl.textContent = message;
+  calendarLoadingEl.classList.remove('hidden');
+}
+
+function hideCalendarLoading(){
+  if(!calendarLoadingEl) return;
+  calendarLoadingEl.classList.add('hidden');
 }
 
 function normalizeToken(value){
@@ -467,6 +479,7 @@ function resetCalendarUI(){
   if(times) times.innerHTML = '<div class="emptymsg">Search for a city to view availability.</div>';
   if(title) title.textContent = 'Select a day';
   if(label) label.textContent = '—';
+  hideCalendarLoading();
 }
 
 function clearCity(){
@@ -757,6 +770,7 @@ async function loadMonth(y,m,{prefetch=true, autoAdvance=true, visited}={}){
     return;
   }
 
+  showCalendarLoading();
   state.y=y; state.m=m;
   ui.selectedDay = null;
   label.textContent = labelOf(y,m);
@@ -814,6 +828,8 @@ async function loadMonth(y,m,{prefetch=true, autoAdvance=true, visited}={}){
     } catch {
       times.textContent = JSON.stringify({ ok:false, error:e.message }, null, 2);
     }
+  } finally {
+    hideCalendarLoading();
   }
 
   if(prefetch){
