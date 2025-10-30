@@ -21,7 +21,7 @@ This table summarizes how each supported location is routed when the app fetches
 | Laveen | laveen | 85088423 | main | main | app.acuityscheduling.com · owner 23214568 (Early Bird URL preset) |
 | Anthem | anthem | 50529545 | parents | parents | DeerValleyDrivingSchool.as.me |
 | Glendale | glendale | 50529778 | parents | parents | DeerValleyDrivingSchool.as.me |
-| North Phoenix | north-phoenix | 80856319 | parents | parents | DeerValleyDrivingSchool.as.me |
+| North Phoenix | north-phoenix | 50529846 | parents | parents | DeerValleyDrivingSchool.as.me |
 | Peoria | peoria | 50529862 | parents | parents | DeerValleyDrivingSchool.as.me |
 | Sun City | sun-city | 50529915 | parents | parents | DeerValleyDrivingSchool.as.me |
 | Surprise | surprise | 50529929 | parents | parents | DeerValleyDrivingSchool.as.me |
