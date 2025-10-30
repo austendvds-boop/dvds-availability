@@ -1,4 +1,6 @@
-module.exports = (_req, res) => {
+const withCors = require('./_cors');
+
+module.exports = withCors((_req, res) => {
   const hasMainUser = !!process.env.ACUITY_MAIN_USER_ID;
   const hasMainKey  = !!process.env.ACUITY_MAIN_API_KEY;
   const hasParUser  = !!process.env.ACUITY_PARENTS_USER_ID;
@@ -18,4 +20,4 @@ module.exports = (_req, res) => {
     googlemapsapi: googleKey,
     googleMapsApiKey: googleKey
   });
-};
+});
