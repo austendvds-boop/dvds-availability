@@ -52,7 +52,8 @@ const state = {
   googleReady: false,
   autocomplete: null,
   lastQuery: '',
-  lastQueryAt: 0
+  lastQueryAt: 0,
+  manualSelection: false
 };
 
 const ui = { selectedDay: null };
@@ -593,6 +594,7 @@ function resetCalendarUI(){
   const label  = document.getElementById('monthlabel');
   ui.selectedDay = null;
   state.y = null; state.m = null;
+  state.manualSelection = false;
   if(grid) grid.innerHTML = '';
   if(times) times.innerHTML = '<div class="emptymsg">Search for a city to view availability.</div>';
   if(title) title.textContent = 'Select a day';
@@ -636,6 +638,7 @@ async function applyResolution(result, normalized){
   renderPackages(city);
   setStepActive(step2Section, true);
 
+  state.manualSelection = false;
   if(times){
     times.innerHTML = '<div class="emptymsg">Select a day to view available times.</div>';
   }
@@ -806,6 +809,7 @@ function buildGrid(days, availByDate){
       el.appendChild(dot);
       el.addEventListener('click', () => {
         ui.selectedDay = dstr;
+        state.manualSelection = true;
         highlightActive(grid);
         showTimes(dstr, list);
       });
@@ -818,6 +822,71 @@ function buildGrid(days, availByDate){
     grid.appendChild(el);
   });
 
+  highlightActive(grid);
+}
+
+function maybeAutoSelect(times){
+  if(!Array.isArray(times) || !times.length) return;
+
+  const slotsByDay = new Map();
+  times.forEach(slot => {
+    if(!slot || !slot.time) return;
+    const day = slot.time.slice(0,10);
+    if(!slotsByDay.has(day)) slotsByDay.set(day, []);
+    slotsByDay.get(day).push(slot);
+  });
+
+  if(!slotsByDay.size) return;
+
+  const grid = document.getElementById('grid');
+
+  if(state.manualSelection && ui.selectedDay){
+    const current = slotsByDay.get(ui.selectedDay);
+    if(current && current.length){
+      showTimes(ui.selectedDay, current);
+      if(grid) highlightActive(grid);
+    }
+    return;
+  }
+
+  if(!grid) return;
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const orderedDays = Array.from(slotsByDay.keys()).sort();
+  let selectedDay = null;
+  let slotsForDay = null;
+
+  for(const day of orderedDays){
+    const slots = slotsByDay.get(day) || [];
+    const hasFuture = slots.some(slot => {
+      const when = new Date(slot.time);
+      return when >= today;
+    });
+    if(hasFuture){
+      selectedDay = day;
+      slotsForDay = slots;
+      break;
+    }
+  }
+
+  if(!selectedDay){
+    for(const day of orderedDays){
+      const slots = slotsByDay.get(day) || [];
+      if(slots.length){
+        selectedDay = day;
+        slotsForDay = slots;
+        break;
+      }
+    }
+  }
+
+  if(!selectedDay || !slotsForDay || !slotsForDay.length) return;
+
+  ui.selectedDay = selectedDay;
+  state.manualSelection = true;
+  showTimes(selectedDay, slotsForDay);
   highlightActive(grid);
 }
 
@@ -908,6 +977,7 @@ async function loadMonth(y,m,{prefetch=true, autoAdvance=true, visited}={}){
   const cached = state.cache.get(key) || sget(key);
   if(cached){
     drawMonth(cached);
+    maybeAutoSelect(cached.times || []);
   }
 
   if(state.inFlight) state.inFlight.abort();
@@ -924,6 +994,7 @@ async function loadMonth(y,m,{prefetch=true, autoAdvance=true, visited}={}){
     sset(key, data); state.cache.set(key, data);
     drawMonth(data);
     status.textContent = 'Ready';
+    maybeAutoSelect(data.times || []);
 
     if(autoAdvance){
       const monthEnd = new Date(to + 'T23:59:59');
@@ -1093,12 +1164,14 @@ async function prefetchMonth(y,m){
       if(!state.city) return;
       const m = state.m===1 ? 12 : state.m-1;
       const y = state.m===1 ? state.y-1 : state.y;
+      state.manualSelection = false;
       await loadMonth(y,m);
     });
     next?.addEventListener('click', async ()=>{
       if(!state.city) return;
       const m = state.m===12 ? 1 : state.m+1;
       const y = state.m===12 ? state.y+1 : state.y;
+      state.manualSelection = false;
       await loadMonth(y,m);
     });
   }catch(e){
