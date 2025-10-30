@@ -221,14 +221,6 @@ function slugFromAlias(value){
   return key ? CITY_ALIAS_MAP.get(key) || null : null;
 }
 
-function withTimestamp(url){
-  if(!url) return url;
-  const hasTs = /[?&]ts=/.test(url);
-  const ts = Date.now();
-  const sep = url.includes('?') ? '&' : '?';
-  return hasTs ? url.replace(/([?&]ts=)[^&]*/, `$1${ts}`) : `${url}${sep}ts=${ts}`;
-}
-
 function toRadians(deg){ return deg * (Math.PI/180); }
 
 function distanceMiles(lat1,lng1,lat2,lng2){
@@ -477,13 +469,6 @@ function resetCalendarUI(){
   if(label) label.textContent = '—';
 }
 
-function hideResultCard(){
-  const result = document.getElementById('result');
-  if(result) result.classList.add('hidden');
-  const frame = document.getElementById('result-frame');
-  if(frame){ frame.removeAttribute('src'); }
-}
-
 function clearCity(){
   state.city = null;
   if(state.inFlight){
@@ -491,107 +476,7 @@ function clearCity(){
     state.inFlight = null;
   }
   renderPackages(null);
-  hideResultCard();
   resetCalendarUI();
-}
-
-function describeResolution(city, normalized, meta){
-  const parts = [];
-  if(normalized?.raw){
-    parts.push(`Input: ${normalized.raw}`);
-  }
-  if(meta?.method === 'proximity' && typeof meta.distance === 'number'){
-    parts.push(`Routed to the nearest calendar (${meta.distance.toFixed(1)} mi)`);
-  }else if(meta?.method === 'phoenix-band'){
-    parts.push('Routed by Phoenix latitude band');
-  }else if(meta?.method === 'phoenix-subarea'){
-    parts.push('Routed by Phoenix sub-area');
-  }
-  parts.push('Need help? Call 602-663-3502.');
-  return parts.join(' · ');
-}
-
-let acuityScriptPromise = null;
-
-function upgradeAcuityEmbed(){
-  if(acuityScriptPromise) return acuityScriptPromise;
-  acuityScriptPromise = new Promise((resolve, reject) => {
-    if(typeof document === 'undefined'){ resolve(); return; }
-    if(document.querySelector('script[data-acuity-embed]')){ resolve(); return; }
-    const script = document.createElement('script');
-    script.src = 'https://embed.acuityscheduling.com/js/embed.js';
-    script.async = true;
-    script.dataset.acuityEmbed = 'true';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Acuity embed failed to load'));
-    document.head.appendChild(script);
-  }).catch(err => {
-    console.warn('Acuity embed loader error', err);
-  });
-  return acuityScriptPromise;
-}
-
-function showResultCard(city, normalized, meta){
-  const container = document.getElementById('result');
-  const card = document.getElementById('result-card');
-  const title = document.getElementById('result-title');
-  const sub = document.getElementById('result-sub');
-  const link = document.getElementById('result-link');
-  const frame = document.getElementById('result-frame');
-  const errorEl = document.getElementById('result-error');
-  const toggle = document.getElementById('result-toggle');
-
-  if(!container || !card){
-    return;
-  }
-
-  const url = city.url || city.baseUrl;
-  if(!url){
-    if(errorEl){
-      errorEl.textContent = 'We could not load a scheduler for this city. Please call 602-663-3502.';
-      errorEl.classList.remove('hidden');
-    }
-    return;
-  }
-
-  const stamped = withTimestamp(url);
-  if(title){
-    title.textContent = `${city.label || city.name} scheduler`;
-  }
-  if(sub){
-    sub.textContent = describeResolution(city, normalized, meta);
-  }
-  if(link){
-    link.href = stamped;
-  }
-  if(errorEl){
-    errorEl.classList.add('hidden');
-    errorEl.textContent = '';
-  }
-  if(card){
-    card.classList.remove('collapsed');
-  }
-  if(toggle){
-    toggle.textContent = 'Collapse calendar';
-  }
-  if(frame && !frame.dataset.bound){
-    frame.addEventListener('load', () => {
-      if(errorEl){ errorEl.classList.add('hidden'); }
-    });
-    frame.addEventListener('error', () => {
-      if(errorEl){
-        errorEl.textContent = 'There was a problem loading the scheduler. Please call 602-663-3502.';
-        errorEl.classList.remove('hidden');
-      }
-    });
-    frame.dataset.bound = 'true';
-  }
-  if(frame){
-    frame.src = stamped;
-  }
-
-  container.classList.remove('hidden');
-  upgradeAcuityEmbed();
 }
 
 async function applyResolution(result, normalized){
@@ -603,7 +488,6 @@ async function applyResolution(result, normalized){
     showFinderMessage(`${result.error} Call 602-663-3502 for help.`, 'error');
     if(!state.city){
       resetCalendarUI();
-      hideResultCard();
       renderPackages(null);
     }
     return;
@@ -618,7 +502,6 @@ async function applyResolution(result, normalized){
   state.city = city;
   showFinderMessage(`Showing availability for ${city.label || city.name}.`, 'success');
   renderPackages(city);
-  showResultCard(city, normalized, result.meta || {});
 
   if(times){
     times.innerHTML = '<div class="emptymsg">Select a day to view available times.</div>';
@@ -638,7 +521,7 @@ async function applyResolution(result, normalized){
 async function processQuery({ query, place }){
   const trimmed = (query || '').trim();
   if(!trimmed){
-    showFinderMessage('Search for your city or ZIP to load the correct scheduler.');
+    showFinderMessage('Search for your city or ZIP to view the packages available in your area.');
     clearCity();
     return;
   }
@@ -962,8 +845,6 @@ async function prefetchMonth(y,m){
   const finder = document.getElementById('finder');
   const finderInput = document.getElementById('finder-input');
   const clearBtn = document.getElementById('finder-clear');
-  const resultToggle = document.getElementById('result-toggle');
-  const resultCard = document.getElementById('result-card');
 
   if(finderInput){ finderInput.disabled = true; }
   if(clearBtn){ clearBtn.disabled = true; }
@@ -971,7 +852,7 @@ async function prefetchMonth(y,m){
   resetCalendarUI();
   renderPackages(null);
 
-  const defaultMessage = 'Search for your city or ZIP to load the correct scheduler.';
+  const defaultMessage = 'Search for your city or ZIP to view the packages available in your area.';
   showFinderMessage(defaultMessage);
 
   try{
@@ -1044,12 +925,6 @@ async function prefetchMonth(y,m){
       }
       showFinderMessage(defaultMessage);
       clearCity();
-    });
-
-    resultToggle?.addEventListener('click', () => {
-      if(!resultCard) return;
-      const collapsed = resultCard.classList.toggle('collapsed');
-      resultToggle.textContent = collapsed ? 'Expand calendar' : 'Collapse calendar';
     });
 
     prev?.addEventListener('click', async ()=>{
