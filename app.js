@@ -57,6 +57,68 @@ const state = {
 
 const ui = { selectedDay: null };
 
+initIframeMessaging();
+
+function initIframeMessaging(){
+  if (typeof window === 'undefined') return;
+  if (window === window.parent) return;
+  if (!document || !document.body) return;
+
+  let lastHeight = 0;
+  const computeHeight = () => {
+    const doc = document.documentElement;
+    const body = document.body;
+    return Math.max(
+      doc?.scrollHeight || 0,
+      body?.scrollHeight || 0,
+      doc?.offsetHeight || 0,
+      body?.offsetHeight || 0
+    );
+  };
+
+  const postSize = () => {
+    const height = computeHeight();
+    if (!height) return;
+    if (Math.abs(height - lastHeight) < 2) return;
+    lastHeight = height;
+    window.parent.postMessage({ type: 'DVDS_IFRAME_SIZE', height }, '*');
+  };
+
+  const schedulePost = () => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(postSize);
+    } else {
+      setTimeout(postSize, 0);
+    }
+  };
+
+  if (typeof ResizeObserver !== 'undefined') {
+    try {
+      const ro = new ResizeObserver(() => schedulePost());
+      ro.observe(document.body);
+    } catch (err) {
+      console.warn('ResizeObserver failed', err);
+    }
+  } else {
+    window.addEventListener('resize', schedulePost, { passive: true });
+  }
+
+  if (typeof MutationObserver !== 'undefined') {
+    try {
+      const mo = new MutationObserver(() => schedulePost());
+      mo.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+    } catch (err) {
+      console.warn('MutationObserver failed', err);
+    }
+  }
+
+  window.addEventListener('load', () => {
+    setTimeout(postSize, 50);
+  }, { once: true });
+
+  schedulePost();
+}
+
 const PACKAGE_CATALOG = {
   ultimate: { emoji: '🚀', title: 'Ultimate Package', details: '8 Lessons · 2.5 Hours Each (20 Hours Total)' },
   license: { emoji: '🏁', title: 'License Ready Package', details: '4 Lessons · 2.5 Hours Each (10 Hours Total)' },
