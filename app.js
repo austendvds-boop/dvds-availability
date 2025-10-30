@@ -1,7 +1,40 @@
+const globalConfig = typeof window !== 'undefined'
+  ? (window.DVDS_APP_CONFIG || window.DVDS_CONFIG || window.DVDS_WIDGET || {})
+  : {};
+
+let scriptEl = null;
+if (typeof document !== 'undefined') {
+  scriptEl = document.currentScript && document.currentScript.dataset && ('dvdsApp' in document.currentScript.dataset)
+    ? document.currentScript
+    : document.querySelector('script[data-dvds-app]');
+}
+
+const scriptConfig = scriptEl ? {
+  apiBase: scriptEl.getAttribute('data-api-base') || scriptEl.getAttribute('data-api-root') || '',
+  googleKey: scriptEl.getAttribute('data-google-key') || scriptEl.getAttribute('data-googlemaps-key') || ''
+} : {};
+
+const CONFIG = {
+  apiBase: scriptConfig.apiBase || globalConfig.apiBase || globalConfig.apiRoot || '',
+  googleKey: scriptConfig.googleKey
+    || globalConfig.googleKey
+    || globalConfig.googleMapsKey
+    || globalConfig.googlemapsapi
+    || (typeof window !== 'undefined' ? (window.googlemapsapi || window.GOOGLE_MAPS_API_KEY || '') : '')
+};
+
+const API_ROOT = CONFIG.apiBase ? CONFIG.apiBase.replace(/\/$/, '') : '';
+
+const endpoint = (path) => {
+  if (!path) return '';
+  if (!API_ROOT) return path;
+  return `${API_ROOT}${path.startsWith('/') ? '' : '/'}${path}`;
+};
+
 const API = {
-  locations: '/api/locations',
-  availability: '/api/availability',
-  env: '/api/env-check'
+  locations: endpoint('/api/locations'),
+  availability: endpoint('/api/availability'),
+  env: endpoint('/api/env-check')
 };
 
 const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -897,7 +930,7 @@ async function prefetchMonth(y,m){
   try{
     const [loc, env] = await Promise.all([
       getJSON(API.locations),
-      getJSON(API.env).catch(()=>null)
+      API.env ? getJSON(API.env).catch(()=>null) : Promise.resolve(null)
     ]);
 
     if(!loc.ok) throw new Error(loc.error || 'locations failed');
@@ -919,7 +952,11 @@ async function prefetchMonth(y,m){
     if(finderInput){ finderInput.disabled = false; }
     if(clearBtn){ clearBtn.disabled = false; }
 
-    const mapsKey = env?.googlemapsapi || env?.googleMapsApiKey || env?.googleMapsKey || env?.GOOGLE_MAPS_API_KEY;
+    const mapsKey = env?.googlemapsapi
+      || env?.googleMapsApiKey
+      || env?.googleMapsKey
+      || env?.GOOGLE_MAPS_API_KEY
+      || CONFIG.googleKey;
     if(mapsKey){
       state.googleKey = mapsKey;
       ensureGoogleMaps(mapsKey).then(google => {
