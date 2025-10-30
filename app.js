@@ -50,7 +50,9 @@ const state = {
   inFlight: null,
   googleKey: null,
   googleReady: false,
-  autocomplete: null
+  autocomplete: null,
+  lastQuery: '',
+  lastQueryAt: 0
 };
 
 const ui = { selectedDay: null };
@@ -596,6 +598,8 @@ async function processQuery({ query, place }){
   }
 
   showFinderMessage('Matching your location…');
+  state.lastQuery = trimmed;
+  state.lastQueryAt = Date.now();
 
   try {
     let normalized = null;
@@ -994,11 +998,31 @@ async function prefetchMonth(y,m){
       }
     });
 
+    const passiveSubmit = async () => {
+      if(!finderInput) return;
+      const value = finderInput.value || '';
+      const trimmed = value.trim();
+      if(!trimmed) return;
+      const justRan = trimmed === state.lastQuery && (Date.now() - (state.lastQueryAt || 0)) < 400;
+      if(justRan) return;
+      await handleQuery(value);
+    };
+
+    finderInput?.addEventListener('change', () => {
+      passiveSubmit();
+    });
+
+    finderInput?.addEventListener('blur', () => {
+      setTimeout(() => { passiveSubmit(); }, 0);
+    });
+
     clearBtn?.addEventListener('click', () => {
       if(finderInput){
         finderInput.value = '';
         finderInput.focus();
       }
+      state.lastQuery = '';
+      state.lastQueryAt = 0;
       showFinderMessage(defaultMessage);
       clearCity();
     });
