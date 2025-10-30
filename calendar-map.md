@@ -19,7 +19,7 @@ This table summarizes how each supported location is routed when the app fetches
 | Buckeye | buckeye | 85088423 | main | main | app.acuityscheduling.com · owner 23214568 (Early Bird URL preset) |
 | Tolleson | tolleson | 85088423 | main | main | app.acuityscheduling.com · owner 23214568 (Early Bird URL preset) |
 | Laveen | laveen | 85088423 | main | main | app.acuityscheduling.com · owner 23214568 (Early Bird URL preset) |
-| Anthem | anthem | 50529545 | parents | parents | DeerValleyDrivingSchool.as.me |
+| Anthem | anthem | 52197630 | main | main | app.acuityscheduling.com · owner 23214568 |
 | Glendale | glendale | 50529778 | parents | parents | DeerValleyDrivingSchool.as.me |
 | North Phoenix | north-phoenix | 50529846 | parents | parents | DeerValleyDrivingSchool.as.me |
 | Peoria | peoria | 50529862 | parents | parents | DeerValleyDrivingSchool.as.me |

@@ -67,8 +67,10 @@
   },
   "anthem": {
     "label": "Anthem",
-    "account": "parents",
-    "baseUrl": "https://DeerValleyDrivingSchool.as.me/"
+    "account": "main",
+    "owner": 23214568,
+    "baseUrl": "https://app.acuityscheduling.com/schedule.php",
+    "url": "https://app.acuityscheduling.com/schedule.php?owner=23214568&appointmentType=52197630"
   },
   "glendale": {
     "label": "Glendale",
