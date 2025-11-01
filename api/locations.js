@@ -1,4 +1,6 @@
-module.exports = async (_req, res) => {
+const withCors = require('./_cors');
+
+module.exports = withCors(async (_req, res) => {
   try {
     const types = require('../city-types.json');
     const locs = require('../location-config.json');
@@ -37,4 +39,4 @@ module.exports = async (_req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
-};
+});

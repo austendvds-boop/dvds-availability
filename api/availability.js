@@ -80,7 +80,9 @@ async function perDayAggregate(dates, tz, apptType, cfg, auth, urlFor) {
   return { times, errors };
 }
 
-module.exports = async (req, res) => {
+const withCors = require('./_cors');
+
+module.exports = withCors(async (req, res) => {
   try {
     const url = new URL(req.url, "http://localhost");
     const city = url.searchParams.get("city");
@@ -230,4 +232,4 @@ module.exports = async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok:false, error: err.message });
   }
-};
+});
