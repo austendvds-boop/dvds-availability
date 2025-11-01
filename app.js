@@ -938,8 +938,8 @@ function showTimes(dateStr, list){
   const human = new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
   title.textContent = human;
   if(timePromptEl){
-    timePromptEl.classList.add('hidden');
-    timePromptEl.setAttribute('aria-hidden','true');
+    timePromptEl.classList.remove('hidden');
+    timePromptEl.setAttribute('aria-hidden','false');
   }
 
   if(!list.length){
