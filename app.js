@@ -166,6 +166,7 @@ const packageGrid = typeof document !== 'undefined' ? document.getElementById('p
 const packageNote = typeof document !== 'undefined' ? document.getElementById('packages-note') : null;
 const packagesPlaceholder = typeof document !== 'undefined' ? document.getElementById('packages-placeholder') : null;
 const calendarLoadingEl = typeof document !== 'undefined' ? document.getElementById('calendar-loading') : null;
+const timePromptEl = typeof document !== 'undefined' ? document.getElementById('time-prompt') : null;
 
 const finderMessageEl = typeof document !== 'undefined' ? document.getElementById('finder-message') : null;
 const phoenixPromptEl = typeof document !== 'undefined' ? document.getElementById('finder-phoenix') : null;
@@ -611,6 +612,10 @@ function resetCalendarUI(){
   if(times) times.innerHTML = '<div class="emptymsg">Search for a city to view availability.</div>';
   if(title) title.textContent = 'View available times';
   if(label) label.textContent = '—';
+  if(timePromptEl){
+    timePromptEl.classList.add('hidden');
+    timePromptEl.setAttribute('aria-hidden','true');
+  }
   hideCalendarLoading();
 }
 
@@ -932,6 +937,10 @@ function showTimes(dateStr, list){
   const times = document.getElementById('times');
   const human = new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
   title.textContent = human;
+  if(timePromptEl){
+    timePromptEl.classList.add('hidden');
+    timePromptEl.setAttribute('aria-hidden','true');
+  }
 
   if(!list.length){
     times.innerHTML = '<div class="emptymsg">No times available.</div>';
@@ -1079,6 +1088,20 @@ async function prefetchMonth(y,m){
 
   if(finderInput){ finderInput.disabled = true; }
   if(clearBtn){ clearBtn.disabled = true; }
+
+  if(times){
+    times.addEventListener('click', (event) => {
+      const target = event.target;
+      if(!target || typeof target !== 'object') return;
+      if(!(target instanceof HTMLElement)) return;
+      const pill = target.classList.contains('pill') ? target : target.closest('.pill');
+      if(!pill) return;
+      if(timePromptEl){
+        timePromptEl.classList.remove('hidden');
+        timePromptEl.setAttribute('aria-hidden','false');
+      }
+    });
+  }
 
   resetCalendarUI();
   renderPackages(null);

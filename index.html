@@ -85,8 +85,9 @@
   .panel-title{ font-weight:600 }
   .panel-body{ padding:14px; display:flex; flex-direction:column; gap:20px; }
   .pills{ display:flex; flex-wrap:wrap; gap:10px }
-  .pill{ display:inline-block; padding:10px 14px; border:1px solid var(--ring); border-radius:12px; background:#fff; }
+  .pill{ display:inline-block; padding:10px 14px; border:1px solid var(--ring); border-radius:12px; background:#fff; cursor:pointer; }
   .emptymsg{ color:var(--muted) }
+  .time-prompt{ padding:12px 14px; border-radius:12px; background:#ecfdf5; border:1px solid #a7f3d0; color:var(--brand-ink); font-size:.92rem; line-height:1.4; }
 
   /* Packages */
   .packages{ border-top:1px solid var(--ring); padding-top:16px; display:flex; flex-direction:column; gap:16px; }
@@ -167,6 +168,7 @@
           </div>
           <div class="panel-body">
             <div id="times" class="pills"></div>
+            <div id="time-prompt" class="time-prompt hidden" role="status" aria-live="polite" aria-hidden="true">Purchase a package below to complete your booking.</div>
           </div>
         </aside>
       </div>
